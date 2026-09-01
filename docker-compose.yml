@@ -1,0 +1,126 @@
+name: mockpaper
+
+services:
+  mockpaper-postgres:
+    container_name: mockpaper-postgres
+    hostname: mockpaper-postgres
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - mockpaper-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - mockpaper-network
+
+  mockpaper-backend:
+    container_name: mockpaper-backend
+    hostname: mockpaper-backend
+    image: mockpaper-backend:local
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mockpaper-postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      BACKEND_PORT: 4000
+      FRONTEND_URL: ${FRONTEND_URL}
+      APP_BASE_URL: ${APP_BASE_URL}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@mockpaper-postgres:5432/${POSTGRES_DB}
+      BACKEND_PUBLIC_URL: http://localhost:${BACKEND_PORT:-4100}/api
+      API_DOCS_PUBLIC_URL: http://localhost:${BACKEND_PORT:-4100}/api-docs
+      DATABASE_SYNCHRONIZE: "false"
+      DATABASE_RUN_MIGRATIONS_ON_START: ${DATABASE_RUN_MIGRATIONS_ON_START}
+      DATABASE_SSL: "false"
+      DATABASE_CONNECT_MAX_RETRIES: ${DATABASE_CONNECT_MAX_RETRIES}
+      DATABASE_CONNECT_RETRY_DELAY_MS: ${DATABASE_CONNECT_RETRY_DELAY_MS}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
+      PASSWORD_RESET_TOKEN_EXPIRES_MINUTES: ${PASSWORD_RESET_TOKEN_EXPIRES_MINUTES}
+      PASSWORD_RESET_URL_PATH: ${PASSWORD_RESET_URL_PATH}
+      MAIL_PROVIDER: ${MAIL_PROVIDER}
+      MAIL_FROM: ${MAIL_FROM}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      QUESTION_PROVIDER: ${QUESTION_PROVIDER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL}
+      QUESTION_GENERATION_MAX_ATTEMPTS: ${QUESTION_GENERATION_MAX_ATTEMPTS}
+      QUESTION_GENERATION_TEMPERATURE: ${QUESTION_GENERATION_TEMPERATURE}
+      SEMANTIC_DEDUP_ENABLED: ${SEMANTIC_DEDUP_ENABLED}
+      SEMANTIC_SIMILARITY_THRESHOLD: ${SEMANTIC_SIMILARITY_THRESHOLD}
+      DEFAULT_ADMIN_EMAIL: ${DEFAULT_ADMIN_EMAIL}
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:4000/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      - mockpaper-network
+
+  mockpaper-frontend:
+    container_name: mockpaper-frontend
+    hostname: mockpaper-frontend
+    image: mockpaper-frontend:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    restart: unless-stopped
+    depends_on:
+      mockpaper-backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      FRONTEND_PUBLIC_URL: http://localhost:${FRONTEND_PORT:-3100}
+      BACKEND_PUBLIC_URL: http://localhost:${BACKEND_PORT:-4100}/api
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    networks:
+      - mockpaper-network
+
+volumes:
+  mockpaper-postgres-data:
+    name: mockpaper-postgres-data
+
+networks:
+  mockpaper-network:
+    name: mockpaper-network
+    driver: bridge

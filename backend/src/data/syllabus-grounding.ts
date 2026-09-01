@@ -1,0 +1,979 @@
+import type { Difficulty } from "../constants/domain";
+import { normalizeTopicKey } from "../utils/normalization";
+
+type CorrectOption = "A" | "B" | "C" | "D";
+
+export interface MockQuestionTemplate {
+  id: string;
+  difficulty: Difficulty;
+  conceptTested: string;
+  learningOutcome: string;
+  commonMistake: string;
+  recommendedRemedialAction: string;
+  bloomsTaxonomyLevel: string;
+  sourceReference: string | null;
+  build: () => {
+    questionText: string;
+    options: string[];
+    correctOption: CorrectOption;
+  };
+}
+
+export interface SyllabusGroundingEntry {
+  key: string;
+  subject: string;
+  chapter: string;
+  subTopic: string;
+  chapterNormalized: string;
+  subTopicNormalized: string;
+  summary: string;
+  coreConcepts: string[];
+  learningOutcomes: string[];
+  commonMisconceptions: string[];
+  questionPatterns: string[];
+  validationKeywords: string[];
+  mockQuestionTemplates: MockQuestionTemplate[];
+}
+
+function entry(
+  subject: string,
+  chapter: string,
+  subTopic: string,
+  payload: Omit<
+    SyllabusGroundingEntry,
+    | "key"
+    | "subject"
+    | "chapter"
+    | "subTopic"
+    | "chapterNormalized"
+    | "subTopicNormalized"
+  >,
+): SyllabusGroundingEntry {
+  return {
+    key: `${normalizeTopicKey(subject)}::${normalizeTopicKey(chapter)}::${normalizeTopicKey(subTopic)}`,
+    subject,
+    chapter,
+    subTopic,
+    chapterNormalized: normalizeTopicKey(chapter),
+    subTopicNormalized: normalizeTopicKey(subTopic),
+    ...payload,
+  };
+}
+
+export const SYLLABUS_GROUNDING_ENTRIES: SyllabusGroundingEntry[] = [
+  entry("Physics", "Units and Measurements", "Dimensional Analysis and Applications", {
+    summary:
+      "Focus on dimensional formulae, dimensional consistency of equations, deriving relations up to a dimensionless constant, limitations of dimensional analysis, and unit conversion.",
+    coreConcepts: [
+      "Dimensional formulae of physical quantities",
+      "Checking dimensional homogeneity of physical equations",
+      "Deriving proportional relations using dimensional analysis",
+      "Converting units across systems using dimensional exponents",
+      "Recognizing the limitations of dimensional analysis",
+    ],
+    learningOutcomes: [
+      "Determine dimensional formulae for derived quantities and constants.",
+      "Use dimensional analysis to verify whether a physical equation is dimensionally correct.",
+      "Infer the form of a relation between variables up to a dimensionless constant.",
+      "Identify when dimensional analysis cannot determine an exact physical law.",
+      "Handle unit conversion using dimensional powers correctly.",
+    ],
+    commonMisconceptions: [
+      "Treating numerical constants as discoverable through dimensional analysis.",
+      "Confusing dimensions with units.",
+      "Assuming dimensionally correct equations are automatically physically correct.",
+      "Forgetting that trigonometric and exponential arguments must be dimensionless.",
+    ],
+    questionPatterns: [
+      "Determine the exponents in a relation using dimensions.",
+      "Choose the dimensionally consistent equation.",
+      "Find the unit or dimensional formula of a derived quantity.",
+      "Identify a limitation of dimensional analysis in a conceptual MCQ.",
+      "Convert a quantity between systems of units using dimensions.",
+    ],
+    validationKeywords: [
+      "dimension",
+      "dimensional",
+      "formula",
+      "homogeneous",
+      "unit",
+      "derive",
+      "relation",
+      "quantity",
+      "constant",
+      "equation",
+    ],
+    mockQuestionTemplates: [
+      {
+        id: "da-easy-1",
+        difficulty: "Easy",
+        conceptTested: "Dimensional formula of a derived quantity",
+        learningOutcome: "Determine the dimensions of a derived physical quantity correctly.",
+        commonMistake: "Students often confuse force per unit area with force per unit length.",
+        recommendedRemedialAction:
+          "Rewrite the quantity in base SI terms and reduce it step by step to M, L and T.",
+        bloomsTaxonomyLevel: "Understanding",
+        sourceReference: "NCERT Class 11 Physics - Units and Measurements",
+        build: () => ({
+          questionText:
+            "The dimensional formula of pressure is:",
+          options: ["[M L^-1 T^-2]", "[M L T^-2]", "[M L^2 T^-2]", "[M T^-2]"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "da-easy-2",
+        difficulty: "Easy",
+        conceptTested: "Dimensional homogeneity",
+        learningOutcome: "Identify whether a physical equation is dimensionally consistent.",
+        commonMistake: "Students sometimes compare only one term and ignore the dimensions of every term in the equation.",
+        recommendedRemedialAction:
+          "Check each term separately and confirm that every additive term has identical dimensions.",
+        bloomsTaxonomyLevel: "Understanding",
+        sourceReference: "NCERT Class 11 Physics - Units and Measurements",
+        build: () => ({
+          questionText:
+            "Which one of the following equations is dimensionally correct?",
+          options: ["v = u + at", "s = ut + at", "F = ma^2", "P = Fv^2"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "da-easy-3",
+        difficulty: "Easy",
+        conceptTested: "Limitation of dimensional analysis",
+        learningOutcome: "Recognize what dimensional analysis can and cannot determine.",
+        commonMistake: "Students often assume that numerical coefficients like 2 or pi can be obtained from dimensions.",
+        recommendedRemedialAction:
+          "List the exact outputs of dimensional analysis and separate them from empirical or geometric constants.",
+        bloomsTaxonomyLevel: "Understanding",
+        sourceReference: "NCERT Class 11 Physics - Units and Measurements",
+        build: () => ({
+          questionText:
+            "Dimensional analysis cannot be used to determine:",
+          options: [
+            "whether an equation is dimensionally homogeneous",
+            "the relation between variables up to a dimensionless constant",
+            "the value of a pure numerical constant in a formula",
+            "the dimensional formula of a derived quantity",
+          ],
+          correctOption: "C",
+        }),
+      },
+      {
+        id: "da-medium-1",
+        difficulty: "Medium",
+        conceptTested: "Deriving a relation using dimensional analysis",
+        learningOutcome: "Use dimensions to infer the form of a relation among variables.",
+        commonMistake: "Students sometimes assign the wrong dimension to acceleration due to gravity and obtain incorrect exponents.",
+        recommendedRemedialAction:
+          "Assume T proportional to powers of the variables, substitute dimensions, and equate powers systematically.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Physics - Units and Measurements",
+        build: () => ({
+          questionText:
+            "The time period T of a simple pendulum depends on length l and acceleration due to gravity g. Using dimensional analysis, the possible relation is:",
+          options: ["T proportional to sqrt(l/g)", "T proportional to sqrt(g/l)", "T proportional to lg", "T proportional to l/g"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "da-medium-2",
+        difficulty: "Medium",
+        conceptTested: "Choosing a dimensionally consistent formula",
+        learningOutcome: "Distinguish a valid dimensional relation from tempting but incorrect alternatives.",
+        commonMistake: "Students often ignore that trigonometric arguments must be dimensionless.",
+        recommendedRemedialAction:
+          "Check dimensions inside functions like sine or exponential before checking the whole equation.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Physics - Units and Measurements",
+        build: () => ({
+          questionText:
+            "Which expression can represent a physically meaningful quantity?",
+          options: ["sin(vt)", "exp(x/l)", "log(m + t)", "cos(F + a)"],
+          correctOption: "B",
+        }),
+      },
+      {
+        id: "da-medium-3",
+        difficulty: "Medium",
+        conceptTested: "Dimensional formula of a constant",
+        learningOutcome: "Find the dimensions of a constant from a physical law.",
+        commonMistake: "Students often forget that the proportionality constant must balance the dimensions of all remaining variables.",
+        recommendedRemedialAction:
+          "First write the dimensions of the dependent variable and then divide by the dimensions of the known factors.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Physics - Units and Measurements",
+        build: () => ({
+          questionText:
+            "If force F is given by F = kx, where x is displacement, then the dimensional formula of k is:",
+          options: ["[M T^-2]", "[M L T^-2]", "[M L^-1 T^-2]", "[M L^2 T^-2]"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "da-medium-4",
+        difficulty: "Medium",
+        conceptTested: "Unit conversion using dimensions",
+        learningOutcome: "Convert units correctly by tracking how the dimensions scale with new base units.",
+        commonMistake: "Students often scale only the numerical value and ignore the power of each base unit.",
+        recommendedRemedialAction:
+          "Write the dimensional formula first and then apply the conversion factor to each base unit with its proper exponent.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Physics - Units and Measurements",
+        build: () => ({
+          questionText:
+            "A force has dimensions [M L T^-2]. If the unit of mass is doubled, the unit of length is halved and the unit of time is unchanged, the new unit of force becomes:",
+          options: ["same as the old unit", "equal to the old unit", "twice the old unit", "half of the old unit"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "da-medium-5",
+        difficulty: "Medium",
+        conceptTested: "Dimensional formula of a derived quantity",
+        learningOutcome: "Relate a named physical quantity to force and length or force and area to obtain its dimensions.",
+        commonMistake: "Students often confuse surface tension with pressure and therefore divide force by area instead of length.",
+        recommendedRemedialAction:
+          "Write the physical definition of the quantity first, then reduce it to force, length and time units.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Physics - Units and Measurements",
+        build: () => ({
+          questionText:
+            "Surface tension is defined as force per unit length. Its dimensional formula is:",
+          options: ["[M T^-2]", "[M L^-1 T^-2]", "[M L T^-2]", "[M L^2 T^-2]"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "da-hard-1",
+        difficulty: "Hard",
+        conceptTested: "Dimensional derivation with three variables",
+        learningOutcome: "Set up and solve simultaneous exponent equations in dimensional analysis.",
+        commonMistake: "Students frequently miss one exponent equation and therefore obtain inconsistent powers.",
+        recommendedRemedialAction:
+          "Write separate equations for M, L and T exponents before solving for the unknown powers.",
+        bloomsTaxonomyLevel: "Analysis",
+        sourceReference: "NCERT Class 11 Physics - Units and Measurements",
+        build: () => ({
+          questionText:
+            "The speed v of waves on a stretched string depends on tension T and linear mass density mu. Using dimensional analysis, the correct form is:",
+          options: ["v proportional to sqrt(T/mu)", "v proportional to sqrt(mu/T)", "v proportional to Tmu", "v proportional to T/mu"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "da-hard-2",
+        difficulty: "Hard",
+        conceptTested: "Detecting dimensionally correct but physically incomplete statements",
+        learningOutcome: "Separate dimensional consistency from full physical validity.",
+        commonMistake: "Students often conclude that a dimensionally correct relation must be the final law.",
+        recommendedRemedialAction:
+          "Treat dimensional consistency as a necessary condition and then ask what physical information is still missing.",
+        bloomsTaxonomyLevel: "Analysis",
+        sourceReference: "NCERT Class 11 Physics - Units and Measurements",
+        build: () => ({
+          questionText:
+            "Which statement about dimensional analysis is correct?",
+          options: [
+            "A dimensionally correct equation is always physically correct.",
+            "Dimensional analysis can determine numerical constants such as 1/2.",
+            "Dimensional analysis gives relations only up to a dimensionless constant.",
+            "Dimensional analysis is useful only for unit conversion and nothing else.",
+          ],
+          correctOption: "C",
+        }),
+      },
+      {
+        id: "da-hard-3",
+        difficulty: "Hard",
+        conceptTested: "Dimensional analysis in gravitational force law",
+        learningOutcome: "Determine the dimensions of a physical constant from a multi-variable relation.",
+        commonMistake: "Students often forget that the distance term appears in the denominator with a power.",
+        recommendedRemedialAction:
+          "Substitute the dimensions of force, mass and distance carefully before isolating the constant.",
+        bloomsTaxonomyLevel: "Analysis",
+        sourceReference: "NCERT Class 11 Physics - Units and Measurements",
+        build: () => ({
+          questionText:
+            "From Newton's law F = Gm1m2/r^2, the dimensional formula of G is:",
+          options: ["[M^-1 L^3 T^-2]", "[M L^3 T^-2]", "[M^-1 L^2 T^-2]", "[M L^-1 T^-2]"],
+          correctOption: "A",
+        }),
+      },
+    ],
+  }),
+  entry("Physics", "Thermodynamics", "First Law", {
+    summary:
+      "Focus on the first law of thermodynamics, sign conventions for heat and work, internal energy changes, cyclic processes, and special processes such as adiabatic change.",
+    coreConcepts: [
+      "First law of thermodynamics Delta U = Q - W",
+      "Heat supplied versus work done by the system",
+      "Internal energy as a state function",
+      "Cyclic process with zero net change in internal energy",
+      "Adiabatic process and the role of work in changing internal energy",
+    ],
+    learningOutcomes: [
+      "Apply the first law with the correct sign convention.",
+      "Infer the change in internal energy from heat transfer and work data.",
+      "Identify the correct statement for cyclic and adiabatic processes.",
+      "Differentiate state functions from path-dependent quantities.",
+    ],
+    commonMisconceptions: [
+      "Using Q + W instead of Q - W with the standard sign convention.",
+      "Treating work as a state function.",
+      "Assuming internal energy changes in a complete cycle.",
+    ],
+    questionPatterns: [
+      "Direct numerical application of Q - W",
+      "Conceptual question on cyclic or adiabatic process",
+      "State-function versus path-function discrimination",
+      "Sign-convention MCQ",
+    ],
+    validationKeywords: [
+      "thermodynamics",
+      "heat",
+      "work",
+      "internal",
+      "energy",
+      "adiabatic",
+      "cyclic",
+      "state",
+      "delta",
+    ],
+    mockQuestionTemplates: [
+      {
+        id: "fl-easy-1",
+        difficulty: "Easy",
+        conceptTested: "First law sign convention",
+        learningOutcome: "Use Delta U = Q - W with the correct physical sign convention.",
+        commonMistake: "Students often add Q and W even when work is done by the system.",
+        recommendedRemedialAction:
+          "Label every quantity as positive or negative before substituting into the first-law equation.",
+        bloomsTaxonomyLevel: "Understanding",
+        sourceReference: "NCERT Class 11 Physics - Thermodynamics",
+        build: () => ({
+          questionText:
+            "According to the usual sign convention in thermodynamics, if heat Q is supplied to a system and work W is done by the system, then the first law is written as:",
+          options: ["Delta U = Q - W", "Delta U = Q + W", "Delta U = W - Q", "Delta U = -Q - W"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "fl-easy-2",
+        difficulty: "Easy",
+        conceptTested: "State function of internal energy",
+        learningOutcome: "Identify internal energy as a state function.",
+        commonMistake: "Students sometimes group internal energy with heat and work because all three appear in the first law.",
+        recommendedRemedialAction:
+          "Separate quantities that depend only on state from those that depend on the process path.",
+        bloomsTaxonomyLevel: "Understanding",
+        sourceReference: "NCERT Class 11 Physics - Thermodynamics",
+        build: () => ({
+          questionText:
+            "Which one of the following is a state function?",
+          options: ["Internal energy", "Heat", "Work", "Both heat and work"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "fl-medium-1",
+        difficulty: "Medium",
+        conceptTested: "Numerical application of the first law",
+        learningOutcome: "Calculate internal energy change from heat supplied and work done.",
+        commonMistake: "Students often reverse the sign of work done by the system.",
+        recommendedRemedialAction:
+          "Write the sentence meaning of each number first, then substitute into Delta U = Q - W.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Physics - Thermodynamics",
+        build: () => ({
+          questionText:
+            "A gas absorbs 300 J of heat and does 120 J of work on the surroundings. The change in internal energy of the gas is:",
+          options: ["180 J", "420 J", "-180 J", "-420 J"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "fl-medium-2",
+        difficulty: "Medium",
+        conceptTested: "Adiabatic process",
+        learningOutcome: "Infer internal energy change in an adiabatic process from work done.",
+        commonMistake: "Students sometimes forget that Q = 0 in an adiabatic process.",
+        recommendedRemedialAction:
+          "Begin by writing the defining condition of the process before applying the first law.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Physics - Thermodynamics",
+        build: () => ({
+          questionText:
+            "In an adiabatic expansion, a gas does 50 J of work. The change in internal energy of the gas is:",
+          options: ["-50 J", "0 J", "+50 J", "Cannot be determined"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "fl-medium-3",
+        difficulty: "Medium",
+        conceptTested: "Cyclic process",
+        learningOutcome: "Use the condition Delta U = 0 for a complete thermodynamic cycle.",
+        commonMistake: "Students often think that heat and work must both be zero in a cycle.",
+        recommendedRemedialAction:
+          "Focus on the state-function nature of internal energy to analyze a cycle.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Physics - Thermodynamics",
+        build: () => ({
+          questionText:
+            "For a system executing a complete cycle, which statement is correct?",
+          options: [
+            "Net change in internal energy is zero.",
+            "Net heat exchanged must be zero.",
+            "Net work done must be zero.",
+            "Heat and work are both state functions.",
+          ],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "fl-hard-1",
+        difficulty: "Hard",
+        conceptTested: "Compression with work done on the system",
+        learningOutcome: "Handle sign conventions correctly when work is done on the system.",
+        commonMistake: "Students often use the magnitude of work without updating its sign in the equation.",
+        recommendedRemedialAction:
+          "Translate 'work done on the system' into the sign of W before evaluating Delta U.",
+        bloomsTaxonomyLevel: "Analysis",
+        sourceReference: "NCERT Class 11 Physics - Thermodynamics",
+        build: () => ({
+          questionText:
+            "During compression, 80 J of work is done on an ideal gas while 20 J of heat leaves the gas. The change in internal energy is:",
+          options: ["+60 J", "+100 J", "-60 J", "-100 J"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "fl-hard-2",
+        difficulty: "Hard",
+        conceptTested: "Process comparison using the first law",
+        learningOutcome: "Analyze how heat and work combine to produce the same or different internal-energy changes.",
+        commonMistake: "Students often compare only heat or only work instead of the net effect Q - W.",
+        recommendedRemedialAction:
+          "Compute the internal-energy change for each process separately before comparing them.",
+        bloomsTaxonomyLevel: "Analysis",
+        sourceReference: "NCERT Class 11 Physics - Thermodynamics",
+        build: () => ({
+          questionText:
+            "In process I, a gas absorbs 100 J of heat and does 40 J of work. In process II, it absorbs 60 J of heat and no work is done. Which statement is correct?",
+          options: [
+            "The increase in internal energy is the same in both processes.",
+            "Process I gives a larger increase in internal energy.",
+            "Process II gives a larger increase in internal energy.",
+            "Internal energy cannot be compared because the paths are different.",
+          ],
+          correctOption: "A",
+        }),
+      },
+    ],
+  }),
+  entry("Biology", "Genetics", "Mendelian Inheritance", {
+    summary:
+      "Focus on Mendel's laws, monohybrid and dihybrid crosses, genotype versus phenotype ratios, dominance, segregation, and test crosses.",
+    coreConcepts: [
+      "Law of segregation",
+      "Law of independent assortment",
+      "Monohybrid cross genotype and phenotype ratios",
+      "Dihybrid cross outcomes",
+      "Test cross as a diagnostic tool for genotype",
+    ],
+    learningOutcomes: [
+      "Predict offspring ratios from Mendelian crosses.",
+      "Use a test cross to infer an unknown genotype.",
+      "Differentiate genotype ratio from phenotype ratio.",
+      "Apply Mendel's laws to standard inheritance patterns.",
+    ],
+    commonMisconceptions: [
+      "Confusing phenotype ratio with genotype ratio.",
+      "Assuming a dominant trait is always more common in a population.",
+      "Using a self-cross when a test cross is required.",
+    ],
+    questionPatterns: [
+      "Direct ratio question from a monohybrid or dihybrid cross",
+      "Test-cross genotype inference",
+      "Law-based conceptual MCQ",
+      "Dominant versus recessive trait reasoning",
+    ],
+    validationKeywords: [
+      "mendel",
+      "inheritance",
+      "segregation",
+      "dominant",
+      "recessive",
+      "genotype",
+      "phenotype",
+      "monohybrid",
+      "dihybrid",
+      "test cross",
+    ],
+    mockQuestionTemplates: [
+      {
+        id: "mi-easy-1",
+        difficulty: "Easy",
+        conceptTested: "Monohybrid phenotype ratio",
+        learningOutcome: "Recall the phenotype ratio of a classic monohybrid cross.",
+        commonMistake: "Students often confuse the phenotype ratio 3:1 with the genotype ratio 1:2:1.",
+        recommendedRemedialAction:
+          "Write the Punnett square explicitly and separate genotype counting from phenotype counting.",
+        bloomsTaxonomyLevel: "Understanding",
+        sourceReference: "NCERT Class 11 Biology - Principles of Inheritance and Variation",
+        build: () => ({
+          questionText:
+            "In a monohybrid cross between two heterozygous tall pea plants (Tt x Tt), the phenotypic ratio in the offspring is:",
+          options: ["3 tall : 1 dwarf", "1 tall : 2 dwarf : 1 tall", "1 tall : 1 dwarf", "9 tall : 3 dwarf : 3 tall : 1 dwarf"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mi-easy-2",
+        difficulty: "Easy",
+        conceptTested: "Law of segregation",
+        learningOutcome: "Identify the Mendelian law illustrated by separation of alleles during gamete formation.",
+        commonMistake: "Students sometimes describe independent assortment when the stem refers to one gene pair.",
+        recommendedRemedialAction:
+          "Check whether the question involves one trait or two traits before naming the law.",
+        bloomsTaxonomyLevel: "Understanding",
+        sourceReference: "NCERT Class 11 Biology - Principles of Inheritance and Variation",
+        build: () => ({
+          questionText:
+            "The separation of the two alleles of a gene during gamete formation illustrates Mendel's:",
+          options: ["law of segregation", "law of dominance", "law of linkage", "law of mutation"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mi-medium-1",
+        difficulty: "Medium",
+        conceptTested: "Test cross",
+        learningOutcome: "Use a test cross to infer the genotype of an individual showing the dominant phenotype.",
+        commonMistake: "Students often perform a self-cross instead of crossing with a homozygous recessive parent.",
+        recommendedRemedialAction:
+          "Memorize the definition of a test cross and practice translating it into the correct mating pair.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Biology - Principles of Inheritance and Variation",
+        build: () => ({
+          questionText:
+            "A pea plant with round seeds shows the dominant phenotype. To determine whether its genotype is RR or Rr, it should be crossed with:",
+          options: ["rr", "RR", "Rr", "any round-seeded plant"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mi-medium-2",
+        difficulty: "Medium",
+        conceptTested: "Genotype ratio in a monohybrid cross",
+        learningOutcome: "Predict the genotype ratio produced by a heterozygous self-cross.",
+        commonMistake: "Students sometimes state the phenotype ratio when the question asks for genotypes.",
+        recommendedRemedialAction:
+          "List all possible zygotes from the Punnett square before combining identical genotypes.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Biology - Principles of Inheritance and Variation",
+        build: () => ({
+          questionText:
+            "The genotypic ratio obtained from the cross Tt x Tt is:",
+          options: ["1 TT : 2 Tt : 1 tt", "3 TT : 1 tt", "3 tall : 1 dwarf", "1 Tt : 1 tt"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mi-medium-3",
+        difficulty: "Medium",
+        conceptTested: "Independent assortment",
+        learningOutcome: "Recognize the law demonstrated by a dihybrid cross under classical Mendelian conditions.",
+        commonMistake: "Students sometimes apply segregation only and miss that two gene pairs are assorting.",
+        recommendedRemedialAction:
+          "Look for whether two independent gene pairs are being tracked in the cross.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Biology - Principles of Inheritance and Variation",
+        build: () => ({
+          questionText:
+            "The appearance of the 9:3:3:1 phenotypic ratio in the F2 generation of a dihybrid cross supports Mendel's:",
+          options: ["law of independent assortment", "law of dominance only", "chromosome theory only", "blending inheritance"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mi-hard-1",
+        difficulty: "Hard",
+        conceptTested: "Test-cross offspring interpretation",
+        learningOutcome: "Infer the parental genotype from the outcome of a diagnostic cross.",
+        commonMistake: "Students often ignore the appearance of the recessive phenotype, which immediately rules out a homozygous dominant parent.",
+        recommendedRemedialAction:
+          "Use the presence or absence of recessive offspring as the first genotype clue in a test cross.",
+        bloomsTaxonomyLevel: "Analysis",
+        sourceReference: "NCERT Class 11 Biology - Principles of Inheritance and Variation",
+        build: () => ({
+          questionText:
+            "A tall pea plant is crossed with a dwarf plant and the progeny show 1 tall : 1 dwarf. The genotype of the tall parent is:",
+          options: ["Tt", "TT", "tt", "Cannot be determined"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mi-hard-2",
+        difficulty: "Hard",
+        conceptTested: "Reasoning from genotype and phenotype ratios",
+        learningOutcome: "Use Mendelian logic to distinguish whether a proposed interpretation is correct.",
+        commonMistake: "Students sometimes think the dominant allele disappears in the recessive phenotype class.",
+        recommendedRemedialAction:
+          "Track allele transmission across generations instead of reasoning only from phenotype names.",
+        bloomsTaxonomyLevel: "Analysis",
+        sourceReference: "NCERT Class 11 Biology - Principles of Inheritance and Variation",
+        build: () => ({
+          questionText:
+            "Which statement is correct for a monohybrid cross involving complete dominance?",
+          options: [
+            "The recessive phenotype appears only in homozygous recessive offspring.",
+            "The dominant allele disappears in the F2 generation.",
+            "Heterozygous offspring express both traits equally.",
+            "The genotype ratio and phenotype ratio are always the same.",
+          ],
+          correctOption: "A",
+        }),
+      },
+    ],
+  }),
+  entry("Chemistry", "Some Basic Concepts of Chemistry", "Mole Concept and Stoichiometry", {
+    summary:
+      "Focus on moles, molar mass, Avogadro's number, empirical and molecular formulae, limiting reagent, and stoichiometric calculations.",
+    coreConcepts: [
+      "Conversion among mass, moles, particles and gas volume",
+      "Stoichiometric coefficients and mole ratios",
+      "Limiting reagent and product calculation",
+      "Empirical versus molecular formula",
+      "Use of Avogadro's number in particle counting",
+    ],
+    learningOutcomes: [
+      "Convert between mass and moles accurately.",
+      "Identify the limiting reagent in a balanced reaction.",
+      "Find the number of particles from the amount of substance.",
+      "Derive empirical or molecular formula from composition data.",
+    ],
+    commonMisconceptions: [
+      "Treating stoichiometric coefficients as mass ratios instead of mole ratios.",
+      "Using the reagent with the smaller mass as the limiting reagent without calculation.",
+      "Confusing empirical formula with molecular formula.",
+    ],
+    questionPatterns: [
+      "Simple mole calculation",
+      "Limiting reagent determination",
+      "Empirical formula MCQ",
+      "Avogadro-number particle-count question",
+    ],
+    validationKeywords: [
+      "mole",
+      "stoichiometry",
+      "molar",
+      "avogadro",
+      "limiting",
+      "reagent",
+      "empirical",
+      "molecular",
+      "formula",
+      "mass",
+    ],
+    mockQuestionTemplates: [
+      {
+        id: "mc-easy-1",
+        difficulty: "Easy",
+        conceptTested: "Mass to mole conversion",
+        learningOutcome: "Convert a given mass into moles using molar mass.",
+        commonMistake: "Students often multiply by molar mass instead of dividing by it.",
+        recommendedRemedialAction:
+          "Write the unit equation moles = mass divided by molar mass before substituting values.",
+        bloomsTaxonomyLevel: "Understanding",
+        sourceReference: "NCERT Class 11 Chemistry - Some Basic Concepts of Chemistry",
+        build: () => ({
+          questionText:
+            "The number of moles present in 18 g of water is:",
+          options: ["1 mol", "18 mol", "0.5 mol", "2 mol"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mc-easy-2",
+        difficulty: "Easy",
+        conceptTested: "Avogadro number",
+        learningOutcome: "Relate one mole to the number of constituent particles.",
+        commonMistake: "Students sometimes attach Avogadro's number to grams instead of moles.",
+        recommendedRemedialAction:
+          "Link the idea of one mole to particles explicitly before combining it with mass information.",
+        bloomsTaxonomyLevel: "Understanding",
+        sourceReference: "NCERT Class 11 Chemistry - Some Basic Concepts of Chemistry",
+        build: () => ({
+          questionText:
+            "One mole of any substance contains:",
+          options: [
+            "6.022 x 10^23 entities",
+            "6.022 x 10^23 grams",
+            "22.4 entities",
+            "1.0 x 10^23 molecules only",
+          ],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mc-medium-1",
+        difficulty: "Medium",
+        conceptTested: "Limiting reagent",
+        learningOutcome: "Identify the reagent that gets exhausted first in a balanced reaction.",
+        commonMistake: "Students often compare reactant masses directly without converting to mole requirements from the equation.",
+        recommendedRemedialAction:
+          "Convert each reactant into moles and compare with the stoichiometric coefficient before choosing the limiting reagent.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Chemistry - Some Basic Concepts of Chemistry",
+        build: () => ({
+          questionText:
+            "For the reaction 2H2 + O2 -> 2H2O, if 4 mol of H2 and 1 mol of O2 are mixed, the limiting reagent is:",
+          options: ["O2", "H2", "H2O", "None, both are consumed completely"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mc-medium-2",
+        difficulty: "Medium",
+        conceptTested: "Particle count from moles",
+        learningOutcome: "Calculate the number of molecules from a given amount in moles.",
+        commonMistake: "Students sometimes divide by Avogadro's number instead of multiplying.",
+        recommendedRemedialAction:
+          "Track the unit conversion from moles to molecules explicitly before evaluating the arithmetic.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Chemistry - Some Basic Concepts of Chemistry",
+        build: () => ({
+          questionText:
+            "The number of molecules present in 0.5 mol of CO2 is:",
+          options: [
+            "3.011 x 10^23",
+            "6.022 x 10^23",
+            "1.204 x 10^24",
+            "0.5 x 10^23",
+          ],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mc-medium-3",
+        difficulty: "Medium",
+        conceptTested: "Empirical formula",
+        learningOutcome: "Derive the empirical formula from the simplest whole-number mole ratio.",
+        commonMistake: "Students often stop at the decimal mole ratio and forget to convert it to whole numbers.",
+        recommendedRemedialAction:
+          "Convert percentage composition to moles first, then divide by the smallest mole value and scale to whole numbers if needed.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Chemistry - Some Basic Concepts of Chemistry",
+        build: () => ({
+          questionText:
+            "A compound contains 40% carbon, 6.67% hydrogen and 53.33% oxygen by mass. Its empirical formula is:",
+          options: ["CH2O", "C2H4O2", "CHO", "CH3O"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mc-hard-1",
+        difficulty: "Hard",
+        conceptTested: "Stoichiometric mass calculation",
+        learningOutcome: "Combine mole concept with reaction stoichiometry to compute product mass.",
+        commonMistake: "Students sometimes use the correct stoichiometric ratio but the wrong molar mass in the final conversion.",
+        recommendedRemedialAction:
+          "Separate the calculation into three steps: mass to moles, stoichiometric conversion, then moles to mass.",
+        bloomsTaxonomyLevel: "Analysis",
+        sourceReference: "NCERT Class 11 Chemistry - Some Basic Concepts of Chemistry",
+        build: () => ({
+          questionText:
+            "For the reaction N2 + 3H2 -> 2NH3, the mass of NH3 formed when 1 mol of N2 reacts completely with excess H2 is:",
+          options: ["34 g", "17 g", "28 g", "51 g"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "mc-hard-2",
+        difficulty: "Hard",
+        conceptTested: "Molecular formula from empirical formula",
+        learningOutcome: "Determine the molecular formula using empirical-formula mass and molar mass.",
+        commonMistake: "Students often forget to compare the given molar mass with the empirical-formula mass.",
+        recommendedRemedialAction:
+          "Compute the empirical-formula mass first and then find the multiplying factor from the molar mass.",
+        bloomsTaxonomyLevel: "Analysis",
+        sourceReference: "NCERT Class 11 Chemistry - Some Basic Concepts of Chemistry",
+        build: () => ({
+          questionText:
+            "The empirical formula of a compound is CH2O and its molar mass is 180 g mol^-1. The molecular formula is:",
+          options: ["C6H12O6", "CH2O", "C3H6O3", "C2H4O2"],
+          correctOption: "A",
+        }),
+      },
+    ],
+  }),
+  entry("Mathematics", "Complex Numbers and Quadratic Equations", "Quadratic Equations", {
+    summary:
+      "Focus on the standard form of a quadratic equation, roots, discriminant, nature of roots, sum and product of roots, and forming equations from given roots.",
+    coreConcepts: [
+      "Discriminant and nature of roots",
+      "Sum and product of roots",
+      "Relation between coefficients and roots",
+      "Forming a quadratic equation from roots",
+      "Special conditions such as equal roots or reciprocal roots",
+    ],
+    learningOutcomes: [
+      "Classify the roots of a quadratic from its discriminant.",
+      "Use alpha + beta and alpha beta relations correctly.",
+      "Construct a quadratic equation from given roots.",
+      "Apply root conditions to solve structured JEE-style MCQs.",
+    ],
+    commonMisconceptions: [
+      "Using -b/c instead of -b/a for the sum of roots.",
+      "Confusing real and distinct roots with equal roots.",
+      "Forgetting to write the quadratic in standard form before applying formulas.",
+    ],
+    questionPatterns: [
+      "Discriminant-based nature-of-roots question",
+      "Direct sum/product of roots MCQ",
+      "Equation from given roots",
+      "Condition on coefficients for equal or reciprocal roots",
+    ],
+    validationKeywords: [
+      "quadratic",
+      "roots",
+      "discriminant",
+      "sum",
+      "product",
+      "equation",
+      "alpha",
+      "beta",
+      "coefficient",
+    ],
+    mockQuestionTemplates: [
+      {
+        id: "qe-easy-1",
+        difficulty: "Easy",
+        conceptTested: "Discriminant and nature of roots",
+        learningOutcome: "Use the discriminant to identify the nature of roots.",
+        commonMistake: "Students sometimes stop after checking that the discriminant is non-negative and forget the equal-root case.",
+        recommendedRemedialAction:
+          "Compare the discriminant with zero explicitly before naming the type of roots.",
+        bloomsTaxonomyLevel: "Understanding",
+        sourceReference: "NCERT Class 11 Mathematics - Complex Numbers and Quadratic Equations",
+        build: () => ({
+          questionText:
+            "For the equation x^2 - 6x + 9 = 0, the roots are:",
+          options: ["real and equal", "real and distinct", "imaginary", "irrational and distinct"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "qe-easy-2",
+        difficulty: "Easy",
+        conceptTested: "Sum of roots",
+        learningOutcome: "Find the sum of roots from the coefficients of a quadratic equation.",
+        commonMistake: "Students often use the wrong denominator while applying the root relation.",
+        recommendedRemedialAction:
+          "Rewrite the equation in the form ax^2 + bx + c = 0 and apply -b/a carefully.",
+        bloomsTaxonomyLevel: "Understanding",
+        sourceReference: "NCERT Class 11 Mathematics - Complex Numbers and Quadratic Equations",
+        build: () => ({
+          questionText:
+            "If alpha and beta are the roots of 2x^2 - 5x + 3 = 0, then alpha + beta equals:",
+          options: ["5/2", "-5/2", "3/2", "-3/2"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "qe-medium-1",
+        difficulty: "Medium",
+        conceptTested: "Equation from given roots",
+        learningOutcome: "Form the quadratic equation corresponding to a pair of roots.",
+        commonMistake: "Students often use the given roots directly as coefficients instead of first computing their sum and product.",
+        recommendedRemedialAction:
+          "Convert the roots into the monic equation x^2 - (sum)x + product = 0.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Mathematics - Complex Numbers and Quadratic Equations",
+        build: () => ({
+          questionText:
+            "The quadratic equation whose roots are 2 and 3 is:",
+          options: ["x^2 - 5x + 6 = 0", "x^2 + 5x + 6 = 0", "x^2 - 6x + 5 = 0", "x^2 + 6x - 5 = 0"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "qe-medium-2",
+        difficulty: "Medium",
+        conceptTested: "Product of roots",
+        learningOutcome: "Compute the product of roots using c/a.",
+        commonMistake: "Students often switch c/a with a/c.",
+        recommendedRemedialAction:
+          "Place the equation in standard form and evaluate c divided by a before simplifying.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Mathematics - Complex Numbers and Quadratic Equations",
+        build: () => ({
+          questionText:
+            "If alpha and beta are the roots of 3x^2 - 7x + 2 = 0, then alpha beta equals:",
+          options: ["2/3", "3/2", "-2/3", "-3/2"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "qe-medium-3",
+        difficulty: "Medium",
+        conceptTested: "Nature of roots from discriminant",
+        learningOutcome: "Decide whether the roots are real, distinct, equal or non-real based on b^2 - 4ac.",
+        commonMistake: "Students sometimes misread a negative discriminant as irrational instead of non-real.",
+        recommendedRemedialAction:
+          "Compute the discriminant numerically and connect its sign to the standard classification table.",
+        bloomsTaxonomyLevel: "Application",
+        sourceReference: "NCERT Class 11 Mathematics - Complex Numbers and Quadratic Equations",
+        build: () => ({
+          questionText:
+            "The roots of x^2 + 4x + 8 = 0 are:",
+          options: ["non-real", "real and equal", "real and distinct", "rational and distinct"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "qe-hard-1",
+        difficulty: "Hard",
+        conceptTested: "Condition for equal roots",
+        learningOutcome: "Use the discriminant condition to determine a parameter value.",
+        commonMistake: "Students often solve only one sign of the parameter or forget to impose b^2 - 4ac = 0 exactly.",
+        recommendedRemedialAction:
+          "Set the discriminant equal to zero and solve the resulting equation carefully for the parameter.",
+        bloomsTaxonomyLevel: "Analysis",
+        sourceReference: "NCERT Class 11 Mathematics - Complex Numbers and Quadratic Equations",
+        build: () => ({
+          questionText:
+            "If the equation x^2 - 2(k + 1)x + k^2 + 1 = 0 has equal roots, then k equals:",
+          options: ["0", "1", "-1", "2"],
+          correctOption: "A",
+        }),
+      },
+      {
+        id: "qe-hard-2",
+        difficulty: "Hard",
+        conceptTested: "Reciprocal roots",
+        learningOutcome: "Use coefficient conditions for a quadratic whose roots are reciprocals of each other.",
+        commonMistake: "Students often forget that reciprocal roots imply the product of roots is 1.",
+        recommendedRemedialAction:
+          "Translate the verbal condition into alpha beta = 1 before using the relation c/a.",
+        bloomsTaxonomyLevel: "Analysis",
+        sourceReference: "NCERT Class 11 Mathematics - Complex Numbers and Quadratic Equations",
+        build: () => ({
+          questionText:
+            "If the roots of ax^2 + bx + c = 0 are reciprocals of each other, then the necessary condition is:",
+          options: ["a = c", "a = -c", "b = 0", "c = 0"],
+          correctOption: "A",
+        }),
+      },
+    ],
+  }),
+];
+
+const entriesByKey = new Map(SYLLABUS_GROUNDING_ENTRIES.map((entry) => [entry.key, entry]));
+
+export function getSyllabusGroundingEntryByKey(key: string) {
+  return entriesByKey.get(key) ?? null;
+}

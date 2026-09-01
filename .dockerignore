@@ -1,0 +1,10 @@
+node_modules
+.output
+dist
+.git
+.DS_Store
+npm-debug.log*
+backend/node_modules
+backend/dist
+backend/.env
+docker-compose.override.yml

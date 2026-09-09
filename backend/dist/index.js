@@ -4,6 +4,7 @@ const data_source_1 = require("./config/data-source");
 const env_1 = require("./config/env");
 const logger_1 = require("./config/logger");
 const app_1 = require("./app");
+const auth_1 = require("./utils/auth");
 function sleep(milliseconds) {
     return new Promise((resolve) => {
         setTimeout(resolve, milliseconds);
@@ -55,19 +56,26 @@ async function initializeDataSource() {
         : new Error("Database initialization failed after all retry attempts.");
 }
 async function start() {
+    const authCookieOptions = (0, auth_1.getAuthCookieOptions)();
     logger_1.logger.info({
         backendPort: env_1.env.BACKEND_PORT,
+        backendPublicUrl: env_1.env.BACKEND_PUBLIC_URL ?? null,
         frontendUrl: env_1.env.FRONTEND_URL,
         questionProvider: env_1.env.QUESTION_PROVIDER,
         openAiConfigured: Boolean(env_1.env.OPENAI_API_KEY?.trim()),
+        trustProxyHops: env_1.env.TRUST_PROXY_HOPS,
+        authCookieSecure: authCookieOptions.secure,
+        authCookieSameSite: authCookieOptions.sameSite,
+        authCookiePartitioned: authCookieOptions.partitioned,
     }, "Backend startup initiated.");
     const dataSource = await initializeDataSource();
     const app = (0, app_1.createApp)(dataSource);
     app.listen(env_1.env.BACKEND_PORT, () => {
         logger_1.logger.info({
             port: env_1.env.BACKEND_PORT,
-            apiUrl: `http://localhost:${env_1.env.BACKEND_PORT}/api`,
-            docsUrl: `http://localhost:${env_1.env.BACKEND_PORT}/api-docs`,
+            apiUrl: env_1.env.BACKEND_PUBLIC_URL ?? `http://localhost:${env_1.env.BACKEND_PORT}/api`,
+            docsUrl: env_1.env.API_DOCS_PUBLIC_URL ??
+                `http://localhost:${env_1.env.BACKEND_PORT}/api-docs`,
             nodeEnv: env_1.env.NODE_ENV,
         }, "MockPaper backend is ready.");
     });

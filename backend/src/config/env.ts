@@ -25,7 +25,19 @@ const optionalPositiveInt = z.preprocess((value) => {
   return value;
 }, z.coerce.number().int().positive().optional());
 
+const optionalNonnegativeInt = z.preprocess((value) => {
+  if (value == null || value === "") return undefined;
+  return value;
+}, z.coerce.number().int().min(0).optional());
+
 const reasoningEffort = z.enum(["none", "low", "medium", "high", "xhigh"]);
+const authCookieSameSite = z.enum(["auto", "lax", "strict", "none"]);
+
+const runtimeEnv = {
+  ...process.env,
+  // Platforms such as Railway provide PORT rather than an app-specific port.
+  BACKEND_PORT: process.env.BACKEND_PORT || process.env.PORT,
+};
 
 const envSchema = z.object({
   NODE_ENV: z
@@ -34,7 +46,13 @@ const envSchema = z.object({
   BACKEND_PORT: z.coerce.number().int().positive().default(4000),
   FRONTEND_URL: z.string().default("http://localhost:3000"),
   APP_BASE_URL: z.string().default("http://localhost:3000"),
+  BACKEND_PUBLIC_URL: z.string().optional(),
+  API_DOCS_PUBLIC_URL: z.string().optional(),
   AUTH_COOKIE_SECURE: booleanish,
+  AUTH_COOKIE_SAME_SITE: authCookieSameSite.default("auto"),
+  TRUST_PROXY_HOPS: optionalNonnegativeInt.pipe(
+    z.number().int().min(0).max(10).optional(),
+  ),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   DATABASE_SYNCHRONIZE: booleanish,
   DATABASE_RUN_MIGRATIONS_ON_START: booleanish,
@@ -93,7 +111,7 @@ const envSchema = z.object({
   DEFAULT_ADMIN_EMAIL: z.string().optional(),
 });
 
-const parsed = envSchema.safeParse(process.env);
+const parsed = envSchema.safeParse(runtimeEnv);
 
 if (!parsed.success) {
   const issues = parsed.error.issues.map(
@@ -105,6 +123,9 @@ if (!parsed.success) {
 export const env = {
   ...parsed.data,
   AUTH_COOKIE_SECURE: parsed.data.AUTH_COOKIE_SECURE,
+  TRUST_PROXY_HOPS:
+    parsed.data.TRUST_PROXY_HOPS ??
+    (parsed.data.NODE_ENV === "production" ? 1 : 0),
   DATABASE_SYNCHRONIZE: parsed.data.DATABASE_SYNCHRONIZE ?? false,
   DATABASE_RUN_MIGRATIONS_ON_START:
     parsed.data.DATABASE_RUN_MIGRATIONS_ON_START ?? true,

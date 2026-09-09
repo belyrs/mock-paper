@@ -5,6 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAuthCookieName = getAuthCookieName;
 exports.shouldUseSecureAuthCookie = shouldUseSecureAuthCookie;
+exports.resolveAuthCookieSameSite = resolveAuthCookieSameSite;
+exports.buildAuthCookieOptions = buildAuthCookieOptions;
 exports.getAuthCookieOptions = getAuthCookieOptions;
 exports.getAuthClearCookieOptions = getAuthClearCookieOptions;
 exports.hashPassword = hashPassword;
@@ -35,13 +37,26 @@ function shouldUseSecureAuthCookie() {
     }
     return [env_1.env.APP_BASE_URL, env_1.env.FRONTEND_URL].some(usesHttps);
 }
-function getAuthCookieOptions() {
+function resolveAuthCookieSameSite(secure = shouldUseSecureAuthCookie()) {
+    if (env_1.env.AUTH_COOKIE_SAME_SITE !== "auto") {
+        return env_1.env.AUTH_COOKIE_SAME_SITE;
+    }
+    // Separate HTTPS frontend/backend origins require SameSite=None for fetch.
+    return secure ? "none" : "lax";
+}
+function buildAuthCookieOptions(secure = shouldUseSecureAuthCookie()) {
+    const sameSite = resolveAuthCookieSameSite(secure);
     return {
         httpOnly: true,
-        sameSite: "lax",
-        secure: shouldUseSecureAuthCookie(),
+        sameSite,
+        secure,
+        partitioned: secure && sameSite === "none",
+        path: "/",
         maxAge: 1000 * 60 * 60 * 8,
     };
+}
+function getAuthCookieOptions() {
+    return buildAuthCookieOptions();
 }
 function getAuthClearCookieOptions() {
     const { maxAge: _maxAge, ...options } = getAuthCookieOptions();

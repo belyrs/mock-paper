@@ -26,7 +26,18 @@ const optionalPositiveInt = zod_1.z.preprocess((value) => {
         return undefined;
     return value;
 }, zod_1.z.coerce.number().int().positive().optional());
+const optionalNonnegativeInt = zod_1.z.preprocess((value) => {
+    if (value == null || value === "")
+        return undefined;
+    return value;
+}, zod_1.z.coerce.number().int().min(0).optional());
 const reasoningEffort = zod_1.z.enum(["none", "low", "medium", "high", "xhigh"]);
+const authCookieSameSite = zod_1.z.enum(["auto", "lax", "strict", "none"]);
+const runtimeEnv = {
+    ...process.env,
+    // Platforms such as Railway provide PORT rather than an app-specific port.
+    BACKEND_PORT: process.env.BACKEND_PORT || process.env.PORT,
+};
 const envSchema = zod_1.z.object({
     NODE_ENV: zod_1.z
         .enum(["development", "test", "production"])
@@ -34,7 +45,11 @@ const envSchema = zod_1.z.object({
     BACKEND_PORT: zod_1.z.coerce.number().int().positive().default(4000),
     FRONTEND_URL: zod_1.z.string().default("http://localhost:3000"),
     APP_BASE_URL: zod_1.z.string().default("http://localhost:3000"),
+    BACKEND_PUBLIC_URL: zod_1.z.string().optional(),
+    API_DOCS_PUBLIC_URL: zod_1.z.string().optional(),
     AUTH_COOKIE_SECURE: booleanish,
+    AUTH_COOKIE_SAME_SITE: authCookieSameSite.default("auto"),
+    TRUST_PROXY_HOPS: optionalNonnegativeInt.pipe(zod_1.z.number().int().min(0).max(10).optional()),
     DATABASE_URL: zod_1.z.string().min(1, "DATABASE_URL is required"),
     DATABASE_SYNCHRONIZE: booleanish,
     DATABASE_RUN_MIGRATIONS_ON_START: booleanish,
@@ -92,7 +107,7 @@ const envSchema = zod_1.z.object({
     SEMANTIC_SIMILARITY_THRESHOLD: zod_1.z.coerce.number().min(0).max(1).default(0.92),
     DEFAULT_ADMIN_EMAIL: zod_1.z.string().optional(),
 });
-const parsed = envSchema.safeParse(process.env);
+const parsed = envSchema.safeParse(runtimeEnv);
 if (!parsed.success) {
     const issues = parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`);
     throw new Error(`Invalid environment configuration:\n${issues.join("\n")}`);
@@ -100,6 +115,8 @@ if (!parsed.success) {
 exports.env = {
     ...parsed.data,
     AUTH_COOKIE_SECURE: parsed.data.AUTH_COOKIE_SECURE,
+    TRUST_PROXY_HOPS: parsed.data.TRUST_PROXY_HOPS ??
+        (parsed.data.NODE_ENV === "production" ? 1 : 0),
     DATABASE_SYNCHRONIZE: parsed.data.DATABASE_SYNCHRONIZE ?? false,
     DATABASE_RUN_MIGRATIONS_ON_START: parsed.data.DATABASE_RUN_MIGRATIONS_ON_START ?? true,
     DATABASE_SSL: parsed.data.DATABASE_SSL ?? false,

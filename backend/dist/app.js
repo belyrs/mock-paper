@@ -37,6 +37,7 @@ const question_repository_1 = require("./repositories/question.repository");
 const user_repository_1 = require("./repositories/user.repository");
 function createApp(dataSource) {
     const app = (0, express_1.default)();
+    app.set("trust proxy", env_1.env.TRUST_PROXY_HOPS);
     const allowedOrigins = new Set([env_1.env.FRONTEND_URL, env_1.env.APP_BASE_URL]
         .flatMap((value) => {
         try {

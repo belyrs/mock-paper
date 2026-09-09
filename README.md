@@ -156,13 +156,36 @@ To use real AI generation, set:
 ```env
 QUESTION_PROVIDER=openai
 OPENAI_API_KEY=your_openai_api_key
-OPENAI_MODEL=gpt-4.1-mini
+OPENAI_MODEL=gpt-5.2
+OPENAI_REVIEW_MODEL=gpt-5.2
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
 The specific API key variable used by the backend is:
 
 - `OPENAI_API_KEY`
+
+### Production authentication
+
+When the frontend and backend use separate HTTPS origins, authenticated
+browser requests require a cross-origin cookie. Keep the automatic policy
+unless the deployment has a specific requirement:
+
+```env
+AUTH_COOKIE_SECURE=
+AUTH_COOKIE_SAME_SITE=auto
+TRUST_PROXY_HOPS=1
+```
+
+`auto` uses `SameSite=None; Secure` for HTTPS and `SameSite=Lax` for local
+HTTP development. Cross-site HTTPS cookies are also partitioned so the session
+remains scoped to the frontend site. `TRUST_PROXY_HOPS=1` is appropriate when
+the backend is behind one trusted platform proxy, such as Railway. The frontend
+must continue to use `credentials: "include"`, and `FRONTEND_URL` must exactly
+match its public origin.
+
+Railway supplies `PORT` automatically. The backend honors it whenever
+`BACKEND_PORT` is not explicitly configured.
 
 ## Local Development
 

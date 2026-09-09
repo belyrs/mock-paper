@@ -38,6 +38,8 @@ services:
       FRONTEND_URL: ${FRONTEND_URL}
       APP_BASE_URL: ${APP_BASE_URL}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE}
+      AUTH_COOKIE_SAME_SITE: ${AUTH_COOKIE_SAME_SITE:-auto}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@mockpaper-postgres:5432/${POSTGRES_DB}
       BACKEND_PUBLIC_URL: http://localhost:${BACKEND_PORT:-4100}/api
       API_DOCS_PUBLIC_URL: http://localhost:${BACKEND_PORT:-4100}/api-docs
@@ -80,7 +82,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:4000/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))\"",
+          'node -e "fetch(''http://127.0.0.1:4000/api/health'').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"',
         ]
       interval: 10s
       timeout: 5s
@@ -114,7 +116,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:3000').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))\"",
+          'node -e "fetch(''http://127.0.0.1:3000'').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"',
         ]
       interval: 10s
       timeout: 5s

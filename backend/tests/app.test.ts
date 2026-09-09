@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { DataSource } from "typeorm";
+import supertest from "supertest";
+import { createApp } from "../src/app";
 import { AppError } from "../src/errors/app-error";
 import { AuthService } from "../src/services/auth.service";
 import { DuplicateDetectionService } from "../src/services/duplicate-detection.service";
@@ -27,7 +29,11 @@ import { PaperRepository } from "../src/repositories/paper.repository";
 import { PasswordResetTokenRepository } from "../src/repositories/password-reset-token.repository";
 import { QuestionRepository } from "../src/repositories/question.repository";
 import { UserRepository } from "../src/repositories/user.repository";
-import { getAuthCookieOptions } from "../src/utils/auth";
+import {
+  buildAuthCookieOptions,
+  getAuthCookieOptions,
+  resolveAuthCookieSameSite,
+} from "../src/utils/auth";
 import { createTestDataSource } from "./test-data-source";
 import type {
   GenerationProviderRequest,
@@ -124,6 +130,34 @@ describe("MockPaper backend services", () => {
     expect(cookieOptions.httpOnly).toBe(true);
     expect(cookieOptions.sameSite).toBe("lax");
     expect(cookieOptions.secure).toBe(false);
+    expect(cookieOptions.partitioned).toBe(false);
+    expect(cookieOptions.path).toBe("/");
+    expect(resolveAuthCookieSameSite(true)).toBe("none");
+
+    const crossSiteHttpsCookie = buildAuthCookieOptions(true);
+    expect(crossSiteHttpsCookie.secure).toBe(true);
+    expect(crossSiteHttpsCookie.sameSite).toBe("none");
+    expect(crossSiteHttpsCookie.partitioned).toBe(true);
+  });
+
+  it("persists an HTTP session after account registration", async () => {
+    const agent = supertest.agent(createApp(dataSource));
+    const registration = await agent.post("/api/auth/register").send({
+      name: "Grace Hopper",
+      email: "grace@example.com",
+      password: "supersecret123",
+    });
+
+    expect(registration.status).toBe(201);
+    const setCookie = registration.headers["set-cookie"] as
+      string[] | undefined;
+    expect(setCookie?.[0]).toContain("mockpaper_auth=");
+    expect(setCookie?.[0]).toContain("HttpOnly");
+    expect(setCookie?.[0]).toContain("SameSite=Lax");
+
+    const currentUser = await agent.get("/api/auth/me");
+    expect(currentUser.status).toBe(200);
+    expect(currentUser.body.user.email).toBe("grace@example.com");
   });
 
   it("validates paper generation input", () => {

@@ -33,13 +33,34 @@ export function shouldUseSecureAuthCookie(): boolean {
   return [env.APP_BASE_URL, env.FRONTEND_URL].some(usesHttps);
 }
 
-export function getAuthCookieOptions(): CookieOptions {
+export function resolveAuthCookieSameSite(
+  secure = shouldUseSecureAuthCookie(),
+): CookieOptions["sameSite"] {
+  if (env.AUTH_COOKIE_SAME_SITE !== "auto") {
+    return env.AUTH_COOKIE_SAME_SITE;
+  }
+
+  // Separate HTTPS frontend/backend origins require SameSite=None for fetch.
+  return secure ? "none" : "lax";
+}
+
+export function buildAuthCookieOptions(
+  secure = shouldUseSecureAuthCookie(),
+): CookieOptions {
+  const sameSite = resolveAuthCookieSameSite(secure);
+
   return {
     httpOnly: true,
-    sameSite: "lax",
-    secure: shouldUseSecureAuthCookie(),
+    sameSite,
+    secure,
+    partitioned: secure && sameSite === "none",
+    path: "/",
     maxAge: 1000 * 60 * 60 * 8,
   };
+}
+
+export function getAuthCookieOptions(): CookieOptions {
+  return buildAuthCookieOptions();
 }
 
 export function getAuthClearCookieOptions(): CookieOptions {
@@ -51,11 +72,16 @@ export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, 12);
 }
 
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+export async function verifyPassword(
+  password: string,
+  hash: string,
+): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
 
-export function signAuthToken(user: Pick<User, "id" | "email" | "role">): string {
+export function signAuthToken(
+  user: Pick<User, "id" | "email" | "role">,
+): string {
   const payload: AuthTokenPayload = {
     userId: user.id,
     email: user.email,

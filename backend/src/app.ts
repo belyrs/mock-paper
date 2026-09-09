@@ -33,6 +33,7 @@ import { UserRepository } from "./repositories/user.repository";
 
 export function createApp(dataSource: DataSource) {
   const app = express();
+  app.set("trust proxy", env.TRUST_PROXY_HOPS);
   const allowedOrigins = new Set(
     [env.FRONTEND_URL, env.APP_BASE_URL]
       .flatMap((value) => {
@@ -57,7 +58,9 @@ export function createApp(dataSource: DataSource) {
   );
 
   const userRepository = new UserRepository(dataSource);
-  const passwordResetTokenRepository = new PasswordResetTokenRepository(dataSource);
+  const passwordResetTokenRepository = new PasswordResetTokenRepository(
+    dataSource,
+  );
   const paperRepository = new PaperRepository(dataSource);
   const questionRepository = new QuestionRepository(dataSource);
   const historicalRepository = new HistoricalRepository(dataSource);
@@ -76,7 +79,9 @@ export function createApp(dataSource: DataSource) {
     historicalRepository,
     questionGenerationProvider,
   );
-  const historicalAnalysisService = new HistoricalAnalysisService(historicalRepository);
+  const historicalAnalysisService = new HistoricalAnalysisService(
+    historicalRepository,
+  );
   const syllabusGroundingService = new SyllabusGroundingService();
   const questionGenerationService = new QuestionGenerationService(
     questionGenerationProvider,
@@ -84,7 +89,9 @@ export function createApp(dataSource: DataSource) {
     historicalAnalysisService,
     syllabusGroundingService,
   );
-  const historicalPaperService = new HistoricalPaperService(historicalRepository);
+  const historicalPaperService = new HistoricalPaperService(
+    historicalRepository,
+  );
   const paperService = new PaperService(
     paperRepository,
     questionRepository,
@@ -95,7 +102,9 @@ export function createApp(dataSource: DataSource) {
 
   const authController = new AuthController(authService, passwordResetService);
   const paperController = new PaperController(paperService);
-  const historicalPaperController = new HistoricalPaperController(historicalPaperService);
+  const historicalPaperController = new HistoricalPaperController(
+    historicalPaperService,
+  );
   const healthController = new HealthController(dataSource);
 
   app.use(
@@ -105,7 +114,10 @@ export function createApp(dataSource: DataSource) {
           return callback(null, true);
         }
 
-        logger.warn({ origin, allowedOrigins: Array.from(allowedOrigins) }, "Rejected CORS origin.");
+        logger.warn(
+          { origin, allowedOrigins: Array.from(allowedOrigins) },
+          "Rejected CORS origin.",
+        );
         return callback(new Error("Origin is not allowed by CORS."));
       },
       credentials: true,
@@ -113,7 +125,8 @@ export function createApp(dataSource: DataSource) {
   );
   app.use(helmet());
   app.use((request, response, next) => {
-    const shouldLogRequest = request.method !== "OPTIONS" && request.path !== "/api/health";
+    const shouldLogRequest =
+      request.method !== "OPTIONS" && request.path !== "/api/health";
 
     if (!shouldLogRequest) {
       return next();

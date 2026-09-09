@@ -2,6 +2,7 @@ import { buildDataSource } from "./config/data-source";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
 import { createApp } from "./app";
+import { getAuthCookieOptions } from "./utils/auth";
 
 function sleep(milliseconds: number) {
   return new Promise((resolve) => {
@@ -19,7 +20,11 @@ async function initializeDataSource() {
     ssl: env.DATABASE_SSL,
   };
 
-  for (let attempt = 1; attempt <= env.DATABASE_CONNECT_MAX_RETRIES; attempt += 1) {
+  for (
+    let attempt = 1;
+    attempt <= env.DATABASE_CONNECT_MAX_RETRIES;
+    attempt += 1
+  ) {
     const dataSource = buildDataSource();
 
     try {
@@ -70,12 +75,18 @@ async function initializeDataSource() {
 }
 
 async function start() {
+  const authCookieOptions = getAuthCookieOptions();
   logger.info(
     {
       backendPort: env.BACKEND_PORT,
+      backendPublicUrl: env.BACKEND_PUBLIC_URL ?? null,
       frontendUrl: env.FRONTEND_URL,
       questionProvider: env.QUESTION_PROVIDER,
       openAiConfigured: Boolean(env.OPENAI_API_KEY?.trim()),
+      trustProxyHops: env.TRUST_PROXY_HOPS,
+      authCookieSecure: authCookieOptions.secure,
+      authCookieSameSite: authCookieOptions.sameSite,
+      authCookiePartitioned: authCookieOptions.partitioned,
     },
     "Backend startup initiated.",
   );
@@ -86,8 +97,11 @@ async function start() {
     logger.info(
       {
         port: env.BACKEND_PORT,
-        apiUrl: `http://localhost:${env.BACKEND_PORT}/api`,
-        docsUrl: `http://localhost:${env.BACKEND_PORT}/api-docs`,
+        apiUrl:
+          env.BACKEND_PUBLIC_URL ?? `http://localhost:${env.BACKEND_PORT}/api`,
+        docsUrl:
+          env.API_DOCS_PUBLIC_URL ??
+          `http://localhost:${env.BACKEND_PORT}/api-docs`,
         nodeEnv: env.NODE_ENV,
       },
       "MockPaper backend is ready.",

@@ -18,8 +18,8 @@ import type { GeneratedQuestion } from "@/lib/mock-generator";
 import type { ClassLevel, ExamId } from "@/types/api";
 
 const FORMATS: { value: ExportFormat; label: string }[] = [
-  { value: "pdf", label: "PDF (.pdf)" },
-  { value: "docx", label: "Word (.docx)" },
+  { value: "docx", label: "Word (.docx) - exact reference template" },
+  { value: "pdf", label: "PDF (.pdf) - print-ready layout" },
 ];
 
 export function DownloadDialog({
@@ -34,7 +34,7 @@ export function DownloadDialog({
   classLevel?: ClassLevel | null;
 }) {
   const [open, setOpen] = useState(false);
-  const [format, setFormat] = useState<ExportFormat>("pdf");
+  const [format, setFormat] = useState<ExportFormat>("docx");
   const [downloading, setDownloading] = useState(false);
 
   const handleDownload = async () => {
@@ -63,7 +63,7 @@ export function DownloadDialog({
           <DialogTitle>Download paper</DialogTitle>
           <DialogDescription>
             The question paper and the answer key are saved as two separate
-            files.
+            files. Word uses the supplied reference documents directly.
           </DialogDescription>
         </DialogHeader>
 

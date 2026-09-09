@@ -1,4 +1,4 @@
-export const PROMPT_VERSION = "2026-08-25.v1";
+export const PROMPT_VERSION = "2026-09-08.v8";
 
 export const BASE_PROMPT = `Act as an expert faculty member and question paper setter for NEET, JEE Main, KCET, and CBSE Class 11/12 [SUBJECT] with at least 20 years of experience in competitive exam coaching.
 

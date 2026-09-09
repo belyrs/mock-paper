@@ -56,6 +56,23 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
             "constant",
             "equation",
         ],
+        difficultyGuidance: {
+            Easy: [
+                "Use one direct dimensional-formula identification or one homogeneity check.",
+                "Require no more than one short substitution into base dimensions.",
+            ],
+            Medium: [
+                "Require two linked operations, such as deriving exponents and then interpreting a scaling change.",
+                "Use a nontrivial but unambiguous unit-system conversion or compare several candidate relations.",
+            ],
+            Hard: [
+                "Combine at least three independent exponent constraints with an additional experimental, scaling, or limiting-case condition.",
+                "Use a two-stage task: derive a dimensional relation and then apply it to a unit conversion or changed physical condition.",
+                "Require checking several additive terms and dimensionless function arguments before identifying a subtle inconsistency.",
+                "Present an underdetermined dimensional model and require identifying the missing constraint or the valid family of dimensionless combinations.",
+                "Diagnose a multi-step worked derivation containing one subtle dimensional or exponent error among otherwise plausible steps.",
+            ],
+        },
         mockQuestionTemplates: [
             {
                 id: "da-easy-1",
@@ -68,7 +85,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Physics - Units and Measurements",
                 build: () => ({
                     questionText: "The dimensional formula of pressure is:",
-                    options: ["[M L^-1 T^-2]", "[M L T^-2]", "[M L^2 T^-2]", "[M T^-2]"],
+                    options: [
+                        "[M L^-1 T^-2]",
+                        "[M L T^-2]",
+                        "[M L^2 T^-2]",
+                        "[M T^-2]",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -118,7 +140,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Physics - Units and Measurements",
                 build: () => ({
                     questionText: "The time period T of a simple pendulum depends on length l and acceleration due to gravity g. Using dimensional analysis, the possible relation is:",
-                    options: ["T proportional to sqrt(l/g)", "T proportional to sqrt(g/l)", "T proportional to lg", "T proportional to l/g"],
+                    options: [
+                        "T proportional to sqrt(l/g)",
+                        "T proportional to sqrt(g/l)",
+                        "T proportional to lg",
+                        "T proportional to l/g",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -148,7 +175,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Physics - Units and Measurements",
                 build: () => ({
                     questionText: "If force F is given by F = kx, where x is displacement, then the dimensional formula of k is:",
-                    options: ["[M T^-2]", "[M L T^-2]", "[M L^-1 T^-2]", "[M L^2 T^-2]"],
+                    options: [
+                        "[M T^-2]",
+                        "[M L T^-2]",
+                        "[M L^-1 T^-2]",
+                        "[M L^2 T^-2]",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -163,7 +195,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Physics - Units and Measurements",
                 build: () => ({
                     questionText: "A force has dimensions [M L T^-2]. If the unit of mass is doubled, the unit of length is halved and the unit of time is unchanged, the new unit of force becomes:",
-                    options: ["same as the old unit", "equal to the old unit", "twice the old unit", "half of the old unit"],
+                    options: [
+                        "same as the old unit",
+                        "equal to the old unit",
+                        "twice the old unit",
+                        "half of the old unit",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -178,7 +215,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Physics - Units and Measurements",
                 build: () => ({
                     questionText: "Surface tension is defined as force per unit length. Its dimensional formula is:",
-                    options: ["[M T^-2]", "[M L^-1 T^-2]", "[M L T^-2]", "[M L^2 T^-2]"],
+                    options: [
+                        "[M T^-2]",
+                        "[M L^-1 T^-2]",
+                        "[M L T^-2]",
+                        "[M L^2 T^-2]",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -193,7 +235,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Physics - Units and Measurements",
                 build: () => ({
                     questionText: "The speed v of waves on a stretched string depends on tension T and linear mass density mu. Using dimensional analysis, the correct form is:",
-                    options: ["v proportional to sqrt(T/mu)", "v proportional to sqrt(mu/T)", "v proportional to Tmu", "v proportional to T/mu"],
+                    options: [
+                        "v proportional to sqrt(T/mu)",
+                        "v proportional to sqrt(mu/T)",
+                        "v proportional to Tmu",
+                        "v proportional to T/mu",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -228,7 +275,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Physics - Units and Measurements",
                 build: () => ({
                     questionText: "From Newton's law F = Gm1m2/r^2, the dimensional formula of G is:",
-                    options: ["[M^-1 L^3 T^-2]", "[M L^3 T^-2]", "[M^-1 L^2 T^-2]", "[M L^-1 T^-2]"],
+                    options: [
+                        "[M^-1 L^3 T^-2]",
+                        "[M L^3 T^-2]",
+                        "[M^-1 L^2 T^-2]",
+                        "[M L^-1 T^-2]",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -283,7 +335,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Physics - Thermodynamics",
                 build: () => ({
                     questionText: "According to the usual sign convention in thermodynamics, if heat Q is supplied to a system and work W is done by the system, then the first law is written as:",
-                    options: ["Delta U = Q - W", "Delta U = Q + W", "Delta U = W - Q", "Delta U = -Q - W"],
+                    options: [
+                        "Delta U = Q - W",
+                        "Delta U = Q + W",
+                        "Delta U = W - Q",
+                        "Delta U = -Q - W",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -439,7 +496,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Biology - Principles of Inheritance and Variation",
                 build: () => ({
                     questionText: "In a monohybrid cross between two heterozygous tall pea plants (Tt x Tt), the phenotypic ratio in the offspring is:",
-                    options: ["3 tall : 1 dwarf", "1 tall : 2 dwarf : 1 tall", "1 tall : 1 dwarf", "9 tall : 3 dwarf : 3 tall : 1 dwarf"],
+                    options: [
+                        "3 tall : 1 dwarf",
+                        "1 tall : 2 dwarf : 1 tall",
+                        "1 tall : 1 dwarf",
+                        "9 tall : 3 dwarf : 3 tall : 1 dwarf",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -454,7 +516,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Biology - Principles of Inheritance and Variation",
                 build: () => ({
                     questionText: "The separation of the two alleles of a gene during gamete formation illustrates Mendel's:",
-                    options: ["law of segregation", "law of dominance", "law of linkage", "law of mutation"],
+                    options: [
+                        "law of segregation",
+                        "law of dominance",
+                        "law of linkage",
+                        "law of mutation",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -484,7 +551,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Biology - Principles of Inheritance and Variation",
                 build: () => ({
                     questionText: "The genotypic ratio obtained from the cross Tt x Tt is:",
-                    options: ["1 TT : 2 Tt : 1 tt", "3 TT : 1 tt", "3 tall : 1 dwarf", "1 Tt : 1 tt"],
+                    options: [
+                        "1 TT : 2 Tt : 1 tt",
+                        "3 TT : 1 tt",
+                        "3 tall : 1 dwarf",
+                        "1 Tt : 1 tt",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -499,7 +571,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Biology - Principles of Inheritance and Variation",
                 build: () => ({
                     questionText: "The appearance of the 9:3:3:1 phenotypic ratio in the F2 generation of a dihybrid cross supports Mendel's:",
-                    options: ["law of independent assortment", "law of dominance only", "chromosome theory only", "blending inheritance"],
+                    options: [
+                        "law of independent assortment",
+                        "law of dominance only",
+                        "chromosome theory only",
+                        "blending inheritance",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -745,7 +822,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Mathematics - Complex Numbers and Quadratic Equations",
                 build: () => ({
                     questionText: "For the equation x^2 - 6x + 9 = 0, the roots are:",
-                    options: ["real and equal", "real and distinct", "imaginary", "irrational and distinct"],
+                    options: [
+                        "real and equal",
+                        "real and distinct",
+                        "imaginary",
+                        "irrational and distinct",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -775,7 +857,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Mathematics - Complex Numbers and Quadratic Equations",
                 build: () => ({
                     questionText: "The quadratic equation whose roots are 2 and 3 is:",
-                    options: ["x^2 - 5x + 6 = 0", "x^2 + 5x + 6 = 0", "x^2 - 6x + 5 = 0", "x^2 + 6x - 5 = 0"],
+                    options: [
+                        "x^2 - 5x + 6 = 0",
+                        "x^2 + 5x + 6 = 0",
+                        "x^2 - 6x + 5 = 0",
+                        "x^2 + 6x - 5 = 0",
+                    ],
                     correctOption: "A",
                 }),
             },
@@ -805,7 +892,12 @@ exports.SYLLABUS_GROUNDING_ENTRIES = [
                 sourceReference: "NCERT Class 11 Mathematics - Complex Numbers and Quadratic Equations",
                 build: () => ({
                     questionText: "The roots of x^2 + 4x + 8 = 0 are:",
-                    options: ["non-real", "real and equal", "real and distinct", "rational and distinct"],
+                    options: [
+                        "non-real",
+                        "real and equal",
+                        "real and distinct",
+                        "rational and distinct",
+                    ],
                     correctOption: "A",
                 }),
             },

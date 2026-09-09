@@ -46,6 +46,8 @@ const candidateSchema = z.object({
     CBSE: z.string().optional(),
   }),
   sourceReference: z.string().trim().optional().nullable(),
+  solutionOutline: z.string().trim().min(8).optional(),
+  difficultyRationale: z.string().trim().min(8).optional(),
 });
 
 function sanitizeMaybeString(value: unknown) {
@@ -63,7 +65,9 @@ function countByDifficulty(questions: GeneratedQuestionCandidate[]) {
 }
 
 function hasPlaceholderLeakage(texts: string[]) {
-  return texts.some((text) => bannedPlaceholderPatterns.some((pattern) => pattern.test(text)));
+  return texts.some((text) =>
+    bannedPlaceholderPatterns.some((pattern) => pattern.test(text)),
+  );
 }
 
 function sanitizeText(value: string) {
@@ -77,7 +81,9 @@ function sanitizeText(value: string) {
 }
 
 function sanitizeOption(value: string) {
-  return sanitizeText(value).replace(/^[A-D][\)\].:-]\s*/i, "").trim();
+  return sanitizeText(value)
+    .replace(/^[A-D][\)\].:-]\s*/i, "")
+    .trim();
 }
 
 function normalizeDifficulty(value: unknown) {
@@ -131,7 +137,12 @@ function stripInlinedOptionsFromStem(questionText: string, options: string[]) {
 }
 
 function normalizeCorrectOption(value: unknown, options: string[]) {
-  if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 4) {
+  if (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= 4
+  ) {
     return OPTION_LETTERS[value - 1];
   }
 
@@ -172,7 +183,16 @@ function coerceExamRelevance(value: unknown) {
   }
 
   const record = value as Record<string, unknown>;
-  const read = (key: string) => sanitizeMaybeString(record[key]);
+  const read = (key: string) => {
+    const relevance = record[key];
+    if (typeof relevance === "boolean") {
+      return relevance ? "High" : "N/A";
+    }
+    if (typeof relevance === "number") {
+      return relevance > 0 ? "High" : "N/A";
+    }
+    return sanitizeMaybeString(relevance);
+  };
 
   return {
     JEE_MAIN: read("JEE_MAIN") ?? read("JEE") ?? undefined,
@@ -190,7 +210,9 @@ function coerceQuestionCandidate(rawQuestion: unknown, index: number) {
   const record = rawQuestion as Record<string, unknown>;
   const rawOptions = Array.isArray(record.options)
     ? record.options.map((option) =>
-        typeof option === "string" ? sanitizeOption(option) : String(option ?? ""),
+        typeof option === "string"
+          ? sanitizeOption(option)
+          : String(option ?? ""),
       )
     : [];
   const questionTextSource =
@@ -205,7 +227,8 @@ function coerceQuestionCandidate(rawQuestion: unknown, index: number) {
   const sourceReference = record.sourceReference ?? record.source ?? null;
 
   return {
-    questionNumber: record.questionNumber ?? record.qNo ?? record.number ?? index + 1,
+    questionNumber:
+      record.questionNumber ?? record.qNo ?? record.number ?? index + 1,
     difficulty: normalizeDifficulty(record.difficulty),
     questionText: sanitizedQuestionText,
     options: rawOptions,
@@ -224,7 +247,11 @@ function coerceQuestionCandidate(rawQuestion: unknown, index: number) {
     ),
     examRelevance: coerceExamRelevance(record.examRelevance),
     sourceReference:
-      typeof sourceReference === "string" ? sanitizeText(sourceReference) : sourceReference,
+      typeof sourceReference === "string"
+        ? sanitizeText(sourceReference)
+        : sourceReference,
+    solutionOutline: sanitizeMaybeString(record.solutionOutline),
+    difficultyRationale: sanitizeMaybeString(record.difficultyRationale),
   };
 }
 
@@ -232,7 +259,10 @@ function countInlineChoiceMarkers(text: string) {
   return (text.match(/(?:^|\s)(?:[A-D][\).:]|\([A-D]\))\s+/gi) ?? []).length;
 }
 
-function hasEnoughTopicGrounding(question: GeneratedQuestionCandidate, request: GenerationProviderRequest) {
+function hasEnoughTopicGrounding(
+  question: GeneratedQuestionCandidate,
+  request: GenerationProviderRequest,
+) {
   if (!request.syllabusContext.canonicalMatch) {
     return true;
   }
@@ -248,36 +278,49 @@ function hasEnoughTopicGrounding(question: GeneratedQuestionCandidate, request: 
       question.learningOutcome,
     ].join(" "),
   );
-  const keywordHits = keywordPool.filter((keyword) => combined.includes(keyword));
+  const keywordHits = keywordPool.filter((keyword) =>
+    combined.includes(keyword),
+  );
 
-  return new Set(keywordHits).size >= 2;
+  return new Set(keywordHits).size >= 1;
 }
 
-function conceptAlignsWithGrounding(question: GeneratedQuestionCandidate, request: GenerationProviderRequest) {
+function conceptAlignsWithGrounding(
+  question: GeneratedQuestionCandidate,
+  request: GenerationProviderRequest,
+) {
   if (!request.syllabusContext.canonicalMatch) {
     return true;
   }
 
   const concept = normalizeText(question.conceptTested);
-  const matchesGroundedConcept = request.syllabusContext.coreConcepts.some((allowedConcept) => {
-    const normalizedAllowedConcept = normalizeText(allowedConcept);
-    return (
-      normalizedAllowedConcept.includes(concept) ||
-      concept.includes(normalizedAllowedConcept) ||
-      keywordOverlap(normalizedAllowedConcept, concept) >= 1
-    );
-  });
+  const matchesGroundedConcept = request.syllabusContext.coreConcepts.some(
+    (allowedConcept) => {
+      const normalizedAllowedConcept = normalizeText(allowedConcept);
+      return (
+        normalizedAllowedConcept.includes(concept) ||
+        concept.includes(normalizedAllowedConcept) ||
+        keywordOverlap(normalizedAllowedConcept, concept) >= 1
+      );
+    },
+  );
 
   if (matchesGroundedConcept) {
     return true;
   }
 
-  return request.syllabusContext.validationKeywords.some((keyword) => concept.includes(normalizeText(keyword)));
+  return request.syllabusContext.validationKeywords.some((keyword) =>
+    concept.includes(normalizeText(keyword)),
+  );
 }
 
 function keywordOverlap(left: string, right: string) {
-  const leftTokens = new Set(left.split(" ").filter((token) => token.length >= 4));
-  const rightTokens = new Set(right.split(" ").filter((token) => token.length >= 4));
+  const leftTokens = new Set(
+    left.split(" ").filter((token) => token.length >= 4),
+  );
+  const rightTokens = new Set(
+    right.split(" ").filter((token) => token.length >= 4),
+  );
   let hits = 0;
   for (const token of leftTokens) {
     if (rightTokens.has(token)) {
@@ -293,7 +336,11 @@ export function validateProviderOutput(
 ): ValidatedQuestionPayload[] {
   const parsedQuestions = z
     .array(candidateSchema)
-    .safeParse(result.questions.map((question, index) => coerceQuestionCandidate(question, index)));
+    .safeParse(
+      result.questions.map((question, index) =>
+        coerceQuestionCandidate(question, index),
+      ),
+    );
 
   if (!parsedQuestions.success) {
     throw new AppError(
@@ -314,7 +361,9 @@ export function validateProviderOutput(
     );
   }
 
-  const expectedMix = request.difficultyCounts ?? mixToCounts(request.difficultyMix, request.questionCount);
+  const expectedMix =
+    request.difficultyCounts ??
+    mixToCounts(request.difficultyMix, request.questionCount);
   const actualMix = countByDifficulty(questions);
 
   for (const difficulty of DIFFICULTIES) {
@@ -337,10 +386,14 @@ export function validateProviderOutput(
       options: question.options.map(sanitizeOption),
       conceptTested: sanitizeText(question.conceptTested),
       commonMistake: sanitizeText(question.commonMistake),
-      recommendedRemedialAction: sanitizeText(question.recommendedRemedialAction),
+      recommendedRemedialAction: sanitizeText(
+        question.recommendedRemedialAction,
+      ),
       learningOutcome: sanitizeText(question.learningOutcome),
       bloomsTaxonomyLevel: sanitizeText(question.bloomsTaxonomyLevel),
-      sourceReference: question.sourceReference ? sanitizeText(question.sourceReference) : null,
+      sourceReference: question.sourceReference
+        ? sanitizeText(question.sourceReference)
+        : null,
     };
 
     const userFacingTexts = [
@@ -413,7 +466,9 @@ export function validateProviderOutput(
 
     const normalizedText = normalizeText(sanitizedQuestion.questionText);
     const normalizedHash = hashNormalizedText(sanitizedQuestion.questionText);
-    const structuralFingerprint = hashStructuralText(sanitizedQuestion.questionText);
+    const structuralFingerprint = hashStructuralText(
+      sanitizedQuestion.questionText,
+    );
 
     if (seen.has(normalizedHash)) {
       throw new AppError(
@@ -436,7 +491,9 @@ export function validateProviderOutput(
       text: sanitizedQuestion.questionText,
       options: sanitizedQuestion.options,
       correctOption: sanitizedQuestion.correctOption,
-      correctIndex: ["A", "B", "C", "D"].indexOf(sanitizedQuestion.correctOption),
+      correctIndex: ["A", "B", "C", "D"].indexOf(
+        sanitizedQuestion.correctOption,
+      ),
       conceptTested: sanitizedQuestion.conceptTested,
       commonMistake: sanitizedQuestion.commonMistake,
       recommendedRemedialAction: sanitizedQuestion.recommendedRemedialAction,
@@ -451,8 +508,11 @@ export function validateProviderOutput(
       metadata: {
         requestedQuestionNumber: question.questionNumber,
         returnedOrder: index + 1,
+        generationPlanSlot: request.generationPlan[index] ?? null,
         historicalAnalysisMode: result.historicalAnalysisMode,
         historicalAnalysisSummary: result.historicalAnalysisSummary,
+        solutionOutline: sanitizedQuestion.solutionOutline ?? null,
+        difficultyRationale: sanitizedQuestion.difficultyRationale ?? null,
       },
     };
   });

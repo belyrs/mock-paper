@@ -13,7 +13,11 @@ import { ResilientQuestionGenerationProvider } from "../src/services/generation/
 import { validateProviderOutput } from "../src/services/generation/output-validator";
 import { PaperService } from "../src/services/paper.service";
 import { PasswordResetService } from "../src/services/password-reset.service";
-import { QuestionGenerationService } from "../src/services/question-generation.service";
+import {
+  addRetryCandidateReserve,
+  QuestionGenerationService,
+  shouldAcceptAcademicReview,
+} from "../src/services/question-generation.service";
 import { SyllabusGroundingService } from "../src/services/syllabus-grounding.service";
 import { buildDataSource } from "../src/config/data-source";
 import { generatePaperSchema } from "../src/dtos/paper.dto";
@@ -25,7 +29,12 @@ import { QuestionRepository } from "../src/repositories/question.repository";
 import { UserRepository } from "../src/repositories/user.repository";
 import { getAuthCookieOptions } from "../src/utils/auth";
 import { createTestDataSource } from "./test-data-source";
-import type { GenerationProviderRequest, GenerationProviderResult } from "../src/services/generation/types";
+import type {
+  GenerationProviderRequest,
+  GenerationProviderResult,
+  QuestionQualityReview,
+  ValidatedQuestionPayload,
+} from "../src/services/generation/types";
 
 describe("MockPaper backend services", () => {
   let dataSource: DataSource;
@@ -38,7 +47,9 @@ describe("MockPaper backend services", () => {
     dataSource = await createTestDataSource();
 
     const userRepository = new UserRepository(dataSource);
-    const passwordResetTokenRepository = new PasswordResetTokenRepository(dataSource);
+    const passwordResetTokenRepository = new PasswordResetTokenRepository(
+      dataSource,
+    );
     const paperRepository = new PaperRepository(dataSource);
     const questionRepository = new QuestionRepository(dataSource);
     const generationRunRepository = new GenerationRunRepository(dataSource);
@@ -49,7 +60,9 @@ describe("MockPaper backend services", () => {
       historicalRepository,
       provider,
     );
-    const historicalAnalysisService = new HistoricalAnalysisService(historicalRepository);
+    const historicalAnalysisService = new HistoricalAnalysisService(
+      historicalRepository,
+    );
     const syllabusGroundingService = new SyllabusGroundingService();
     const questionGenerationService = new QuestionGenerationService(
       provider,
@@ -179,16 +192,127 @@ describe("MockPaper backend services", () => {
     expect(prompt).toContain("Subject: Physics");
     expect(prompt).toContain("Class/Grade: Class 11");
     expect(prompt).toContain("Chapter: Units and Measurements");
-    expect(prompt).toContain("Topics/Subtopics: Dimensional Analysis and Applications");
-    expect(prompt).toContain("Target Exams (in priority order): JEE Main, KCET");
+    expect(prompt).toContain(
+      "Topics/Subtopics: Dimensional Analysis and Applications",
+    );
+    expect(prompt).toContain(
+      "Target Exams (in priority order): JEE Main, KCET",
+    );
     expect(prompt).toContain("Easy: 3 question(s)");
     expect(prompt).toContain("Medium: 5 question(s)");
     expect(prompt).toContain("Hard: 2 question(s)");
     expect(prompt).toContain("Q[NUMBER]");
-    expect(prompt).toContain("\"questions\":[");
+    expect(prompt).toContain('"questions":[');
     expect(prompt).toContain("Syllabus grounding for this request:");
     expect(prompt).toContain("Dimensional formulae of physical quantities");
-    expect(prompt).toContain("Deterministic generation plan for diversity and coverage:");
+    expect(prompt).toContain("Difficulty guidance:");
+    expect(prompt).toContain("solutionOutline");
+    expect(prompt).toContain(
+      "applies to the complete paper, not to each focused provider sub-batch",
+    );
+    expect(prompt).toContain(
+      "Return at most one assertion-reason or statement-based question in this response",
+    );
+    expect(prompt).toContain(
+      "Deterministic generation plan for diversity and coverage:",
+    );
+  });
+
+  it("builds distinct retry-aware blueprints for a ten-question syllabus slice", () => {
+    const syllabusContext = new SyllabusGroundingService().resolve({
+      subject: "Physics",
+      chapter: "Units and Measurements",
+      subTopic: "Dimensional Analysis and Applications",
+    });
+    const build = (diversityOffset: number) =>
+      buildGenerationPlan({
+        subject: "Physics",
+        chapter: "Units and Measurements",
+        subTopic: "Dimensional Analysis and Applications",
+        questionCount: 10,
+        difficultyMix: { Easy: 10, Medium: 20, Hard: 70 },
+        difficultyCounts: { Easy: 1, Medium: 2, Hard: 7 },
+        syllabusContext,
+        diversityOffset,
+      });
+
+    const firstPlan = build(88);
+    const retryPlan = build(219);
+    const blueprintKey = (slot: (typeof firstPlan)[number]) =>
+      [slot.difficulty, slot.concept, slot.pattern, slot.questionForm].join(
+        "|",
+      );
+
+    expect(firstPlan).toHaveLength(10);
+    expect(new Set(firstPlan.map(blueprintKey)).size).toBe(10);
+    expect(retryPlan.map(blueprintKey)).not.toEqual(
+      firstPlan.map(blueprintKey),
+    );
+    expect(
+      firstPlan
+        .filter((slot) => slot.difficulty === "Hard")
+        .every((slot) =>
+          syllabusContext.difficultyGuidance?.Hard?.includes(slot.questionForm),
+        ),
+    ).toBe(true);
+    expect(
+      addRetryCandidateReserve({ Easy: 0, Medium: 0, Hard: 1 }, 2),
+    ).toEqual({
+      Easy: 0,
+      Medium: 0,
+      Hard: 2,
+    });
+    expect(
+      addRetryCandidateReserve({ Easy: 0, Medium: 0, Hard: 7 }, 2),
+    ).toEqual({
+      Easy: 0,
+      Medium: 0,
+      Hard: 10,
+    });
+  });
+
+  it("accepts only calibrated difficulty disagreements for otherwise valid hard questions", () => {
+    const question = {
+      difficulty: "Hard",
+      correctOption: "A",
+      metadata: {
+        generationPlanSlot: {
+          difficulty: "Hard",
+          questionForm:
+            "Use a two-stage dimensional derivation and scaling application.",
+        },
+        difficultyRationale:
+          "Requires a derivation followed by an independent scaling application.",
+      },
+    } as unknown as ValidatedQuestionPayload;
+    const review = {
+      candidateIndex: 1,
+      accepted: false,
+      independentCorrectOption: "A",
+      syllabusAligned: true,
+      unambiguous: true,
+      difficultyAligned: false,
+      metadataAligned: true,
+      verificationSummary: "The independently derived answer is option A.",
+      issues: [
+        "Difficulty fits Medium rather than Hard under a broader exam rubric.",
+      ],
+    } satisfies QuestionQualityReview;
+
+    expect(shouldAcceptAcademicReview(question, review)).toBe(true);
+    expect(
+      shouldAcceptAcademicReview(question, {
+        ...review,
+        issues: ["Difficulty is Easy because this is a direct one-step check."],
+      }),
+    ).toBe(false);
+    expect(
+      shouldAcceptAcademicReview(question, {
+        ...review,
+        independentCorrectOption: "B",
+        issues: ["Difficulty fits Medium rather than Hard."],
+      }),
+    ).toBe(false);
   });
 
   it("rejects placeholder-style academic nonsense before persistence", () => {
@@ -329,7 +453,12 @@ describe("MockPaper backend services", () => {
           learningOutcome:
             "Determine magnetic behavior from the electronic configuration of transition-metal ions.",
           bloomsTaxonomyLevel: "Application",
-          examRelevance: { JEE: "High" } as unknown as { JEE_MAIN: string },
+          examRelevance: {
+            JEE: true,
+            NEET: false,
+            KCET: false,
+            CBSE: true,
+          } as unknown as { JEE_MAIN: string },
           sourceReference: "",
         },
       ],
@@ -343,6 +472,8 @@ describe("MockPaper backend services", () => {
     );
     expect(validated[0]?.options).toEqual(["Cr3+", "Mn2+", "Fe3+", "Co2+"]);
     expect(validated[0]?.examRelevance.JEE_MAIN).toBe("High");
+    expect(validated[0]?.examRelevance.NEET).toBe("N/A");
+    expect(validated[0]?.examRelevance.CBSE).toBe("High");
     expect(validated[0]?.sourceReference).toBeNull();
   });
 
@@ -410,12 +541,13 @@ describe("MockPaper backend services", () => {
       restartedSyllabusGroundingService,
     );
 
-    const rerunResult = await restartedQuestionGenerationService.generateForSubject({
-      subjectConfiguration: input.subjects[0]!,
-      classLevel: input.classLevel,
-      targetExams: ["JEE_MAIN"],
-      previousQuestionTexts: [],
-    });
+    const rerunResult =
+      await restartedQuestionGenerationService.generateForSubject({
+        subjectConfiguration: input.subjects[0]!,
+        classLevel: input.classLevel,
+        targetExams: ["JEE_MAIN"],
+        previousQuestionTexts: [],
+      });
 
     expect(rerunResult.questions).toHaveLength(3);
 
@@ -490,24 +622,41 @@ describe("MockPaper backend services", () => {
     const duplicateBatch = await mockProvider.generate(requestTemplate);
     const uniqueBatch = await mockProvider.generate({
       ...requestTemplate,
-      previousQuestions: existingPaper.questions.map((question) => question.text),
+      previousQuestions: existingPaper.questions.map(
+        (question) => question.text,
+      ),
     });
 
     const firstAttemptQuestions = [
-      duplicateBatch.questions.find((question) => question.difficulty === "Easy")!,
-      uniqueBatch.questions.find((question) => question.difficulty === "Medium")!,
+      duplicateBatch.questions.find(
+        (question) => question.difficulty === "Easy",
+      )!,
+      uniqueBatch.questions.find(
+        (question) => question.difficulty === "Medium",
+      )!,
       uniqueBatch.questions.find((question) => question.difficulty === "Hard")!,
     ];
-    const secondAttemptQuestions = [
-      uniqueBatch.questions.find((question) => question.difficulty === "Easy")!,
-    ];
+    const secondAttemptQuestions = (
+      await mockProvider.generate({
+        ...requestTemplate,
+        questionCount: 2,
+        difficultyCounts: { Easy: 2, Medium: 0, Hard: 0 },
+        previousQuestions: existingPaper.questions.map(
+          (question) => question.text,
+        ),
+      })
+    ).questions;
 
     const requestedCounts: number[] = [];
-    const requestedDifficultyCounts: Array<GenerationProviderRequest["difficultyCounts"]> = [];
+    const requestedDifficultyCounts: Array<
+      GenerationProviderRequest["difficultyCounts"]
+    > = [];
     let callCount = 0;
 
     const stagedProvider = {
-      async generate(request: GenerationProviderRequest): Promise<GenerationProviderResult> {
+      async generate(
+        request: GenerationProviderRequest,
+      ): Promise<GenerationProviderResult> {
         requestedCounts.push(request.questionCount);
         requestedDifficultyCounts.push(request.difficultyCounts);
         callCount += 1;
@@ -519,7 +668,8 @@ describe("MockPaper backend services", () => {
           model: "staged-model",
           historicalAnalysisMode: request.historicalAnalysis.mode,
           historicalAnalysisSummary: request.historicalAnalysis.trendSummary,
-          questions: callCount === 1 ? firstAttemptQuestions : secondAttemptQuestions,
+          questions:
+            callCount === 1 ? firstAttemptQuestions : secondAttemptQuestions,
         };
       },
     };
@@ -531,7 +681,9 @@ describe("MockPaper backend services", () => {
       historicalRepository,
       stagedProvider,
     );
-    const historicalAnalysisService = new HistoricalAnalysisService(historicalRepository);
+    const historicalAnalysisService = new HistoricalAnalysisService(
+      historicalRepository,
+    );
     const questionGenerationService = new QuestionGenerationService(
       stagedProvider,
       duplicateDetectionService,
@@ -547,9 +699,139 @@ describe("MockPaper backend services", () => {
     });
 
     expect(result.questions).toHaveLength(3);
-    expect(requestedCounts).toEqual([3, 1]);
-    expect(requestedDifficultyCounts[1]).toEqual({ Easy: 1, Medium: 0, Hard: 0 });
-    expect(result.questions.some((question) => question.text === existingPaper.questions[0]?.text)).toBe(false);
+    expect(requestedCounts).toEqual([3, 2]);
+    expect(requestedDifficultyCounts[1]).toEqual({
+      Easy: 2,
+      Medium: 0,
+      Hard: 0,
+    });
+    expect(
+      result.questions.some(
+        (question) => question.text === existingPaper.questions[0]?.text,
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects academically invalid candidates and repairs only the missing slots", async () => {
+    const syllabusGroundingService = new SyllabusGroundingService();
+    const syllabusContext = syllabusGroundingService.resolve({
+      subject: "Physics",
+      chapter: "Units and Measurements",
+      subTopic: "Dimensional Analysis and Applications",
+    });
+    const baseRequest: GenerationProviderRequest = {
+      subject: "Physics",
+      classLevel: "Class 11",
+      chapter: "Units and Measurements",
+      subTopic: "Dimensional Analysis and Applications",
+      targetExams: ["JEE_MAIN"],
+      questionCount: 3,
+      difficultyMix: { Easy: 100, Medium: 0, Hard: 0 },
+      difficultyCounts: { Easy: 3, Medium: 0, Hard: 0 },
+      historicalAnalysis: {
+        mode: "model_knowledge_fallback",
+        totalRelevantQuestions: 0,
+        yearsCovered: [],
+        trendSummary: "No imported dataset.",
+        recurringConcepts: [],
+        difficultyNotes: [],
+        sourceDetails: [],
+      },
+      previousQuestions: [],
+      syllabusContext,
+      generationPlan: buildGenerationPlan({
+        subject: "Physics",
+        chapter: "Units and Measurements",
+        subTopic: "Dimensional Analysis and Applications",
+        questionCount: 3,
+        difficultyMix: { Easy: 100, Medium: 0, Hard: 0 },
+        difficultyCounts: { Easy: 3, Medium: 0, Hard: 0 },
+        syllabusContext,
+      }),
+    };
+    const sourceQuestions = (
+      await new MockQuestionGenerationProvider().generate(baseRequest)
+    ).questions;
+    let generationCall = 0;
+    let reviewCall = 0;
+    const reviewedProvider = {
+      async generate(
+        request: GenerationProviderRequest,
+      ): Promise<GenerationProviderResult> {
+        generationCall += 1;
+        const questions =
+          generationCall === 1
+            ? sourceQuestions.slice(0, 2)
+            : [sourceQuestions[0]!, sourceQuestions[2]!];
+        return {
+          rawPrompt: `reviewed-${generationCall}`,
+          rawResponse: { generationCall },
+          provider: "reviewed",
+          model: "reviewed-model",
+          historicalAnalysisMode: request.historicalAnalysis.mode,
+          historicalAnalysisSummary: request.historicalAnalysis.trendSummary,
+          questions,
+        };
+      },
+      async reviewQuestions(
+        _request: GenerationProviderRequest,
+        questions: Array<{ text: string }>,
+      ) {
+        reviewCall += 1;
+        return {
+          provider: "reviewed",
+          model: "reviewed-model",
+          rawResponse: { reviewCall },
+          reviews: questions.map((_question, index) => ({
+            candidateIndex: index + 1,
+            accepted: reviewCall > 1 || index > 0,
+            independentCorrectOption: "A" as const,
+            syllabusAligned: true,
+            unambiguous: true,
+            difficultyAligned: true,
+            metadataAligned: true,
+            verificationSummary: "Independent solution confirms option A.",
+            issues:
+              reviewCall === 1 && index === 0
+                ? ["The supplied answer is incorrect."]
+                : [],
+          })),
+        };
+      },
+    };
+    const questionRepository = new QuestionRepository(dataSource);
+    const historicalRepository = new HistoricalRepository(dataSource);
+    const generationService = new QuestionGenerationService(
+      reviewedProvider,
+      new DuplicateDetectionService(
+        questionRepository,
+        historicalRepository,
+        reviewedProvider,
+      ),
+      new HistoricalAnalysisService(historicalRepository),
+      syllabusGroundingService,
+    );
+
+    const result = await generationService.generateForSubject({
+      subjectConfiguration: {
+        subject: "Physics",
+        chapter: "Units and Measurements",
+        subTopic: "Dimensional Analysis and Applications",
+        numberOfQuestions: 2,
+        mix: { Easy: 100, Medium: 0, Hard: 0 },
+      },
+      classLevel: "Class 11",
+      targetExams: ["JEE_MAIN"],
+      previousQuestionTexts: [],
+    });
+
+    expect(generationCall).toBe(2);
+    expect(reviewCall).toBe(2);
+    expect(result.questions).toHaveLength(2);
+    expect(result.questions.map((question) => question.text)).toEqual([
+      sourceQuestions[1]!.questionText,
+      sourceQuestions[2]!.questionText,
+    ]);
   });
 
   it("updates and regenerates questions while preserving the paper", async () => {
@@ -570,22 +852,33 @@ describe("MockPaper backend services", () => {
     });
 
     const firstQuestion = paper.questions[0]!;
-    const updatedPaper = await paperService.updateQuestion(user.id, paper.id, firstQuestion.id, {
-      text: "Edited question text for validation purposes?",
-      options: ["A", "B", "C", "D"],
-      correctOption: "B",
-      conceptTested: "Edited concept",
-      commonMistake: "Edited mistake",
-      recommendedRemedialAction: "Edited action",
-      learningOutcome: "Edited outcome",
-      bloomsTaxonomyLevel: "Analysis",
-      examRelevance: { NEET: "High" },
-    });
+    const updatedPaper = await paperService.updateQuestion(
+      user.id,
+      paper.id,
+      firstQuestion.id,
+      {
+        text: "Edited question text for validation purposes?",
+        options: ["A", "B", "C", "D"],
+        correctOption: "B",
+        conceptTested: "Edited concept",
+        commonMistake: "Edited mistake",
+        recommendedRemedialAction: "Edited action",
+        learningOutcome: "Edited outcome",
+        bloomsTaxonomyLevel: "Analysis",
+        examRelevance: { NEET: "High" },
+      },
+    );
 
     expect(updatedPaper.questions[0]?.correctOption).toBe("B");
 
-    const regeneratedPaper = await paperService.regenerateQuestion(user.id, paper.id, firstQuestion.id);
-    expect(regeneratedPaper.questions[0]?.text).not.toBe("Edited question text for validation purposes?");
+    const regeneratedPaper = await paperService.regenerateQuestion(
+      user.id,
+      paper.id,
+      firstQuestion.id,
+    );
+    expect(regeneratedPaper.questions[0]?.text).not.toBe(
+      "Edited question text for validation purposes?",
+    );
   });
 
   it("rejects structural duplicates even when the numbers are changed", async () => {
@@ -655,8 +948,10 @@ describe("MockPaper backend services", () => {
           correctOption: "A",
           conceptTested: "Unit conversion and dimensional consistency",
           commonMistake: "Multiplying the wrong quantities",
-          recommendedRemedialAction: "Write the physical relation before substituting values.",
-          learningOutcome: "Use dimensional reasoning in a simple motion relation.",
+          recommendedRemedialAction:
+            "Write the physical relation before substituting values.",
+          learningOutcome:
+            "Use dimensional reasoning in a simple motion relation.",
           bloomsTaxonomyLevel: "Understanding",
           examRelevance: { JEE_MAIN: "Medium" },
           sourceReference: null,
@@ -670,8 +965,10 @@ describe("MockPaper backend services", () => {
           correctOption: "A",
           conceptTested: "Unit conversion and dimensional consistency",
           commonMistake: "Confusing speed with acceleration",
-          recommendedRemedialAction: "Use distance equals speed into time for uniform motion.",
-          learningOutcome: "Use dimensional reasoning in a simple motion relation.",
+          recommendedRemedialAction:
+            "Use distance equals speed into time for uniform motion.",
+          learningOutcome:
+            "Use dimensional reasoning in a simple motion relation.",
           bloomsTaxonomyLevel: "Understanding",
           examRelevance: { JEE_MAIN: "Medium" },
           sourceReference: null,
@@ -691,7 +988,9 @@ describe("MockPaper backend services", () => {
   it("supports password reset without a real mail provider in console mode", async () => {
     const user = await createUser();
 
-    const reset = await passwordResetService.requestReset({ email: user.email });
+    const reset = await passwordResetService.requestReset({
+      email: user.email,
+    });
     expect(reset.previewToken).toBeTruthy();
 
     await passwordResetService.confirmReset({
@@ -710,10 +1009,15 @@ describe("MockPaper backend services", () => {
   it("falls back to the mock provider when the OpenAI provider returns an insufficient quota error", async () => {
     const failingProvider = {
       async generate() {
-        throw new AppError(502, "OPENAI_REQUEST_FAILED", "The OpenAI generation request failed.", {
-          status: 429,
-          body: '{"error":{"code":"insufficient_quota"}}',
-        });
+        throw new AppError(
+          502,
+          "OPENAI_REQUEST_FAILED",
+          "The OpenAI generation request failed.",
+          {
+            status: 429,
+            body: '{"error":{"code":"insufficient_quota"}}',
+          },
+        );
       },
       async embedTexts(texts: string[]) {
         return {
@@ -773,9 +1077,10 @@ describe("MockPaper backend services", () => {
 
     expect(result.provider).toBe("mock");
     expect(result.questions).toHaveLength(3);
-    expect((result.rawResponse.fallback as { errorCode?: string } | undefined)?.errorCode).toBe(
-      "OPENAI_REQUEST_FAILED",
-    );
+    expect(
+      (result.rawResponse.fallback as { errorCode?: string } | undefined)
+        ?.errorCode,
+    ).toBe("OPENAI_REQUEST_FAILED");
   });
 
   it("imports historical papers and uses them for analysis during generation", async () => {

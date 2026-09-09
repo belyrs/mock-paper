@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BASE_PROMPT = exports.PROMPT_VERSION = void 0;
-exports.PROMPT_VERSION = "2026-08-25.v1";
+exports.PROMPT_VERSION = "2026-09-08.v8";
 exports.BASE_PROMPT = `Act as an expert faculty member and question paper setter for NEET, JEE Main, KCET, and CBSE Class 11/12 [SUBJECT] with at least 20 years of experience in competitive exam coaching.
 
 FILL THESE IN BEFORE SENDING:

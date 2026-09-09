@@ -4,7 +4,9 @@ import type {
   EmbeddingCallResult,
   GenerationProviderRequest,
   GenerationProviderResult,
+  QuestionQualityReviewResult,
   QuestionGenerationProvider,
+  ValidatedQuestionPayload,
 } from "./types";
 
 function isFallbackEligible(error: unknown) {
@@ -20,8 +22,13 @@ function isFallbackEligible(error: unknown) {
     return false;
   }
 
-  const status = Number((error.details as { status?: unknown } | undefined)?.status ?? 0);
-  return [401, 402, 408, 409, 422, 429, 500, 502, 503, 504].includes(status) || status === 0;
+  const status = Number(
+    (error.details as { status?: unknown } | undefined)?.status ?? 0,
+  );
+  return (
+    [401, 402, 408, 409, 422, 429, 500, 502, 503, 504].includes(status) ||
+    status === 0
+  );
 }
 
 export class ResilientQuestionGenerationProvider implements QuestionGenerationProvider {
@@ -30,7 +37,9 @@ export class ResilientQuestionGenerationProvider implements QuestionGenerationPr
     private readonly fallbackProvider: QuestionGenerationProvider,
   ) {}
 
-  async generate(request: GenerationProviderRequest): Promise<GenerationProviderResult> {
+  async generate(
+    request: GenerationProviderRequest,
+  ): Promise<GenerationProviderResult> {
     try {
       return await this.primaryProvider.generate(request);
     } catch (error) {
@@ -58,9 +67,14 @@ export class ResilientQuestionGenerationProvider implements QuestionGenerationPr
           fallback: {
             attemptedProvider: "openai",
             fallbackProvider: fallbackResult.provider,
-            reason: error instanceof Error ? error.message : "Unknown provider failure",
-            errorCode: error instanceof AppError ? error.code : "UNKNOWN_PROVIDER_ERROR",
-            errorDetails: error instanceof AppError ? error.details ?? null : null,
+            reason:
+              error instanceof Error
+                ? error.message
+                : "Unknown provider failure",
+            errorCode:
+              error instanceof AppError ? error.code : "UNKNOWN_PROVIDER_ERROR",
+            errorDetails:
+              error instanceof AppError ? (error.details ?? null) : null,
           },
         },
       };
@@ -87,6 +101,23 @@ export class ResilientQuestionGenerationProvider implements QuestionGenerationPr
       return this.fallbackProvider.embedTexts(texts);
     }
 
-    throw new Error("No embedding provider is available for semantic duplicate detection.");
+    throw new Error(
+      "No embedding provider is available for semantic duplicate detection.",
+    );
+  }
+
+  async reviewQuestions(
+    request: GenerationProviderRequest,
+    questions: ValidatedQuestionPayload[],
+  ): Promise<QuestionQualityReviewResult> {
+    if (!this.primaryProvider.reviewQuestions) {
+      throw new AppError(
+        503,
+        "ACADEMIC_REVIEW_UNAVAILABLE",
+        "The configured generation provider does not support independent academic review.",
+      );
+    }
+
+    return this.primaryProvider.reviewQuestions(request, questions);
   }
 }

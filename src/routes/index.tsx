@@ -23,7 +23,10 @@ export const Route = createFileRoute("/")({
         content:
           "Create customised JEE and NEET question papers by class, exam, subject, chapter, sub-topic, count and difficulty.",
       },
-      { property: "og:title", content: "MockPaper — Generate JEE & NEET Questions Instantly" },
+      {
+        property: "og:title",
+        content: "MockPaper — Generate JEE & NEET Questions Instantly",
+      },
       {
         property: "og:description",
         content:
@@ -35,10 +38,26 @@ export const Route = createFileRoute("/")({
 });
 
 const highlights = [
-  { icon: FileText, title: "Customise Everything", body: "Exam, class, subject, chapter and sub-topic." },
-  { icon: Target, title: "Question Papers in Seconds", body: "Full papers or a single focused question set." },
-  { icon: KeyRound, title: "Detailed Answer Key", body: "Every paper ships with a separate answer key." },
-  { icon: BarChart3, title: "Well-Structured & Easy to Use", body: "Clean layout, ready to print or download." },
+  {
+    icon: FileText,
+    title: "Customise Everything",
+    body: "Exam, class, subject, chapter and sub-topic.",
+  },
+  {
+    icon: Target,
+    title: "Question Papers in Seconds",
+    body: "Full papers or a single focused question set.",
+  },
+  {
+    icon: KeyRound,
+    title: "Detailed Answer Key",
+    body: "Every paper ships with a separate answer key.",
+  },
+  {
+    icon: BarChart3,
+    title: "Well-Structured & Easy to Use",
+    body: "Clean layout, ready to print or download.",
+  },
 ];
 
 const trust = [
@@ -51,7 +70,7 @@ function Home() {
   const { user } = useAppState();
 
   return (
-    <div className="bg-soft-gradient">
+    <div className="app-canvas">
       {/* Hero */}
       <section className="bg-hero-gradient relative overflow-hidden">
         <div
@@ -59,42 +78,47 @@ function Home() {
           className="pointer-events-none absolute inset-0 opacity-70"
           style={{
             backgroundImage:
-              "radial-gradient(45% 55% at 85% 15%, oklch(1 0 0 / 0.55), transparent 70%), radial-gradient(50% 60% at 5% 90%, oklch(1 0 0 / 0.35), transparent 70%)",
+              "radial-gradient(45% 55% at 85% 15%, oklch(0.79 0.15 82 / 0.22), transparent 70%), radial-gradient(50% 60% at 5% 90%, oklch(1 0 0 / 0.08), transparent 70%)",
           }}
         />
         <div className="relative mx-auto grid max-w-6xl gap-12 px-4 pt-14 pb-16 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:pb-24">
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-surface/70 px-4 py-1.5 text-[13px] font-semibold text-primary backdrop-blur">
+            <span className="inline-flex items-center gap-2 rounded-full border border-gold/45 bg-white/8 px-4 py-1.5 text-[13px] font-semibold text-gold backdrop-blur">
               <Zap className="size-4" /> Instant Mock Paper Creation
             </span>
-            <h1 className="mt-6 text-4xl leading-[1.05] font-bold text-balance text-primary sm:text-5xl md:text-6xl">
+            <h1 className="mt-6 text-4xl leading-[1.05] font-bold text-balance text-white sm:text-5xl md:text-6xl">
               Design Mock Exam Papers.
               <br />
               Save Hours.
               <br />
               Teach Better.
             </h1>
-            <p className="mt-6 max-w-xl text-base text-pretty text-primary/80 sm:text-lg">
-              Create high-quality, customised JEE &amp; NEET question papers in seconds. Tailor by
-              class, exam, subject, chapter, sub-topic, number of questions and difficulty level —
-              from Easy to Hard.
+            <p className="mt-6 max-w-xl text-base text-pretty text-white/72 sm:text-lg">
+              Create high-quality, customised JEE &amp; NEET question papers in
+              seconds. Tailor by class, exam, subject, chapter, sub-topic,
+              number of questions and difficulty level — from Easy to Hard.
             </p>
 
             {user ? (
               <div className="mt-9 flex flex-wrap gap-3">
-                <Button asChild size="lg" className="gap-2">
+                <Button asChild size="lg" variant="gold" className="gap-2">
                   <Link to="/generate">
                     Generate Question Paper <ArrowRight className="size-4" />
                   </Link>
                 </Button>
-                <Button asChild size="lg" variant="outline">
+                <Button
+                  asChild
+                  size="lg"
+                  variant="outline"
+                  className="border-white/25 bg-white/5 text-white hover:bg-white/12 hover:text-gold"
+                >
                   <Link to="/profile">My papers</Link>
                 </Button>
               </div>
             ) : (
               <>
                 <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-                  <Button asChild size="lg" className="gap-2">
+                  <Button asChild size="lg" variant="gold" className="gap-2">
                     <Link to="/login">
                       Log in <ArrowRight className="size-4" />
                     </Link>
@@ -103,12 +127,12 @@ function Home() {
                     asChild
                     size="lg"
                     variant="outline"
-                    className="border-primary/30 bg-transparent text-primary hover:bg-surface/70"
+                    className="border-white/25 bg-white/5 text-white hover:bg-white/12 hover:text-gold"
                   >
                     <Link to="/signup">Sign up</Link>
                   </Button>
                 </div>
-                <p className="mt-4 text-sm font-medium text-primary/70">
+                <p className="mt-4 text-sm font-medium text-white/60">
                   Log in to start generating question papers.
                 </p>
               </>
@@ -116,8 +140,11 @@ function Home() {
 
             <ul className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3">
               {trust.map((t) => (
-                <li key={t.label} className="flex items-center gap-2 text-sm font-semibold text-primary/85">
-                  <t.icon className="size-4" /> {t.label}
+                <li
+                  key={t.label}
+                  className="flex items-center gap-2 text-sm font-semibold text-white/75"
+                >
+                  <t.icon className="size-4 text-gold" /> {t.label}
                 </li>
               ))}
             </ul>
@@ -128,9 +155,9 @@ function Home() {
             <ul className="grid gap-5 self-center sm:gap-6">
               {highlights.map((h) => (
                 <li key={h.title} className="flex gap-3 sm:block">
-                  <h.icon className="size-5 shrink-0 text-primary sm:mb-2" />
+                  <h.icon className="size-5 shrink-0 text-gold sm:mb-2" />
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-primary">{h.title}</p>
+                    <p className="text-sm font-bold text-white">{h.title}</p>
                   </div>
                 </li>
               ))}
@@ -147,8 +174,9 @@ function Home() {
             Everything you need to build a paper
           </h2>
           <p className="mt-3 text-muted-foreground">
-            A guided five-step flow: pick the exam, class and mode, configure each subject, and
-            review your generated questions with a full answer key.
+            A guided five-step flow: pick the exam, class and mode, configure
+            each subject, and review your generated questions with a full answer
+            key.
           </p>
         </div>
 
@@ -184,8 +212,8 @@ function Home() {
               Your next mock paper is minutes away
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-primary-foreground/80">
-              Set the chapters and the difficulty split, and get a print-ready paper with its answer
-              key.
+              Set the chapters and the difficulty split, and get a print-ready
+              paper with its answer key.
             </p>
             <div className="mt-8 flex justify-center">
               <Button asChild size="lg" variant="gold" className="gap-2">

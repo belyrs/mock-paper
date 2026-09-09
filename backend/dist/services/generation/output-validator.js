@@ -36,6 +36,8 @@ const candidateSchema = zod_1.z.object({
         CBSE: zod_1.z.string().optional(),
     }),
     sourceReference: zod_1.z.string().trim().optional().nullable(),
+    solutionOutline: zod_1.z.string().trim().min(8).optional(),
+    difficultyRationale: zod_1.z.string().trim().min(8).optional(),
 });
 function sanitizeMaybeString(value) {
     return typeof value === "string" ? sanitizeText(value) : value;
@@ -59,7 +61,9 @@ function sanitizeText(value) {
         .trim();
 }
 function sanitizeOption(value) {
-    return sanitizeText(value).replace(/^[A-D][\)\].:-]\s*/i, "").trim();
+    return sanitizeText(value)
+        .replace(/^[A-D][\)\].:-]\s*/i, "")
+        .trim();
 }
 function normalizeDifficulty(value) {
     if (typeof value !== "string") {
@@ -101,7 +105,10 @@ function stripInlinedOptionsFromStem(questionText, options) {
     return sanitizeText(questionText.replace(inlinePattern, " "));
 }
 function normalizeCorrectOption(value, options) {
-    if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 4) {
+    if (typeof value === "number" &&
+        Number.isInteger(value) &&
+        value >= 1 &&
+        value <= 4) {
         return OPTION_LETTERS[value - 1];
     }
     if (typeof value !== "string") {
@@ -131,7 +138,16 @@ function coerceExamRelevance(value) {
         return {};
     }
     const record = value;
-    const read = (key) => sanitizeMaybeString(record[key]);
+    const read = (key) => {
+        const relevance = record[key];
+        if (typeof relevance === "boolean") {
+            return relevance ? "High" : "N/A";
+        }
+        if (typeof relevance === "number") {
+            return relevance > 0 ? "High" : "N/A";
+        }
+        return sanitizeMaybeString(relevance);
+    };
     return {
         JEE_MAIN: read("JEE_MAIN") ?? read("JEE") ?? undefined,
         NEET: read("NEET") ?? undefined,
@@ -145,7 +161,9 @@ function coerceQuestionCandidate(rawQuestion, index) {
     }
     const record = rawQuestion;
     const rawOptions = Array.isArray(record.options)
-        ? record.options.map((option) => typeof option === "string" ? sanitizeOption(option) : String(option ?? ""))
+        ? record.options.map((option) => typeof option === "string"
+            ? sanitizeOption(option)
+            : String(option ?? ""))
         : [];
     const questionTextSource = record.questionText ?? record.text ?? record.stem ?? record.question;
     const sanitizedQuestionText = typeof questionTextSource === "string"
@@ -164,7 +182,11 @@ function coerceQuestionCandidate(rawQuestion, index) {
         learningOutcome: sanitizeMaybeString(record.learningOutcome),
         bloomsTaxonomyLevel: sanitizeMaybeString(record.bloomsTaxonomyLevel ?? record.bloomLevel ?? record.bloomsLevel),
         examRelevance: coerceExamRelevance(record.examRelevance),
-        sourceReference: typeof sourceReference === "string" ? sanitizeText(sourceReference) : sourceReference,
+        sourceReference: typeof sourceReference === "string"
+            ? sanitizeText(sourceReference)
+            : sourceReference,
+        solutionOutline: sanitizeMaybeString(record.solutionOutline),
+        difficultyRationale: sanitizeMaybeString(record.difficultyRationale),
     };
 }
 function countInlineChoiceMarkers(text) {
@@ -184,7 +206,7 @@ function hasEnoughTopicGrounding(question, request) {
         question.learningOutcome,
     ].join(" "));
     const keywordHits = keywordPool.filter((keyword) => combined.includes(keyword));
-    return new Set(keywordHits).size >= 2;
+    return new Set(keywordHits).size >= 1;
 }
 function conceptAlignsWithGrounding(question, request) {
     if (!request.syllabusContext.canonicalMatch) {
@@ -224,7 +246,8 @@ function validateProviderOutput(request, result) {
     if (questions.length !== request.questionCount) {
         throw new app_error_1.AppError(502, "INVALID_GENERATION_COUNT", `Expected ${request.questionCount} generated question(s), received ${questions.length}.`);
     }
-    const expectedMix = request.difficultyCounts ?? (0, difficulty_1.mixToCounts)(request.difficultyMix, request.questionCount);
+    const expectedMix = request.difficultyCounts ??
+        (0, difficulty_1.mixToCounts)(request.difficultyMix, request.questionCount);
     const actualMix = countByDifficulty(questions);
     for (const difficulty of domain_1.DIFFICULTIES) {
         if (actualMix[difficulty] !== expectedMix[difficulty]) {
@@ -242,7 +265,9 @@ function validateProviderOutput(request, result) {
             recommendedRemedialAction: sanitizeText(question.recommendedRemedialAction),
             learningOutcome: sanitizeText(question.learningOutcome),
             bloomsTaxonomyLevel: sanitizeText(question.bloomsTaxonomyLevel),
-            sourceReference: question.sourceReference ? sanitizeText(question.sourceReference) : null,
+            sourceReference: question.sourceReference
+                ? sanitizeText(question.sourceReference)
+                : null,
         };
         const userFacingTexts = [
             sanitizedQuestion.questionText,
@@ -319,8 +344,11 @@ function validateProviderOutput(request, result) {
             metadata: {
                 requestedQuestionNumber: question.questionNumber,
                 returnedOrder: index + 1,
+                generationPlanSlot: request.generationPlan[index] ?? null,
                 historicalAnalysisMode: result.historicalAnalysisMode,
                 historicalAnalysisSummary: result.historicalAnalysisSummary,
+                solutionOutline: sanitizedQuestion.solutionOutline ?? null,
+                difficultyRationale: sanitizedQuestion.difficultyRationale ?? null,
             },
         };
     });

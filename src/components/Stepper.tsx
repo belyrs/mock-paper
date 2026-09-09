@@ -1,7 +1,13 @@
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const STEPS = ["Exam", "Class", "Mode", "Configure", "Questions"] as const;
+export const STEPS = [
+  "Exam",
+  "Class",
+  "Mode",
+  "Configure",
+  "Questions",
+] as const;
 export type StepName = (typeof STEPS)[number];
 
 export function Stepper({ current }: { current: StepName }) {
@@ -19,7 +25,7 @@ export function Stepper({ current }: { current: StepName }) {
                 className={cn(
                   "flex items-center gap-2 rounded-full border px-2.5 py-1.5 transition-all duration-200",
                   active
-                    ? "border-primary/25 bg-surface shadow-[var(--shadow-card)]"
+                    ? "border-gold/50 bg-gold-soft shadow-sm"
                     : "border-transparent",
                 )}
               >
@@ -27,8 +33,11 @@ export function Stepper({ current }: { current: StepName }) {
                   className={cn(
                     "flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-bold transition-colors",
                     done && "border-transparent bg-gold text-gold-foreground",
-                    active && "border-transparent bg-brand-gradient text-primary-foreground",
-                    !done && !active && "border-border bg-surface text-muted-foreground",
+                    active &&
+                      "border-transparent bg-primary text-primary-foreground",
+                    !done &&
+                      !active &&
+                      "border-border bg-surface text-muted-foreground",
                   )}
                 >
                   {done ? <Check className="size-3.5" /> : i + 1}

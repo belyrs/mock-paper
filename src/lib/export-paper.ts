@@ -43,6 +43,27 @@ const PDF_MARGINS = {
 const PDF_FIRST_PAGE_CONTENT_START = 148;
 const PDF_NEXT_PAGE_CONTENT_START = 54;
 const PDF_CONTENT_BOTTOM = PDF_PAGE_HEIGHT - PDF_MARGINS.bottom - 20;
+const ANSWER_PAGE_WIDTH = PDF_PAGE_HEIGHT;
+const ANSWER_PAGE_HEIGHT = PDF_PAGE_WIDTH;
+const ANSWER_TABLE_LEFT = 62.64;
+const ANSWER_TABLE_RIGHT = 54;
+const ANSWER_TABLE_TOP = 44;
+const ANSWER_TABLE_BOTTOM = ANSWER_PAGE_HEIGHT - 38;
+const ANSWER_COLUMN_WEIGHTS = [
+  595, 1049, 1608, 1607, 1437, 1292, 1292, 1292, 1631, 3366,
+];
+const ANSWER_HEADERS = [
+  "Q No.",
+  "Correct Option",
+  "Concept Tested",
+  "Learning Outcome assessed",
+  "Bloom's Taxonomy Level",
+  "NEET relevance",
+  "JEE relevance",
+  "KCET relevance",
+  "Common Mistake",
+  "Recommended remedial action if the student gets this question wrong",
+];
 
 let logoImagePromise: Promise<HTMLImageElement> | null = null;
 
@@ -82,7 +103,8 @@ function buildExamLineContext(
   const examLabel = examMeta
     ? `${examMeta.label}${examMeta.stream ? ` (${examMeta.stream})` : ""}`
     : null;
-  const exportLabel = content === "answers" ? "Answer Key" : "Question Paper";
+  const exportLabel =
+    content === "answers" ? "Answer Key" : compactPaperTitle(metadata);
   const remainder = [examLabel, exportLabel].filter(Boolean).join(" ; ");
 
   if (!ordinalClass) {
@@ -105,6 +127,19 @@ function buildExamLineContext(
     ordinalSuffix,
     remainder,
   };
+}
+
+function compactPaperTitle(metadata: ExportMetadata) {
+  const removable = new Set(
+    [metadata.exam, metadata.classLevel]
+      .filter(Boolean)
+      .map((value) => value!.toLowerCase()),
+  );
+  const pieces = metadata.title
+    .split(/\s+[\u2013\u2014-]\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part && !removable.has(part.toLowerCase()));
+  return pieces.join(" - ") || "Question Paper";
 }
 
 function buildExamLineText(
@@ -141,6 +176,131 @@ function questionOptionLabel(optionIndex: number) {
 
 function answerOptionLabel(optionIndex: number) {
   return LETTERS[optionIndex];
+}
+
+function cleanCellValue(value: string | null | undefined) {
+  return value?.replace(/\s+/g, " ").trim() || "N/A";
+}
+
+function answerRow(question: Question, fallbackIndex: number) {
+  return [
+    String(getQuestionNumber(question, fallbackIndex)),
+    question.correctOption || answerOptionLabel(question.correctIndex),
+    cleanCellValue(question.conceptTested),
+    cleanCellValue(question.learningOutcome),
+    cleanCellValue(question.bloomsTaxonomyLevel),
+    cleanCellValue(question.examRelevance.NEET),
+    cleanCellValue(question.examRelevance.JEE_MAIN),
+    cleanCellValue(question.examRelevance.KCET),
+    cleanCellValue(question.commonMistake),
+    cleanCellValue(question.recommendedRemedialAction),
+  ];
+}
+
+function answerAnalysisTitle(metadata: ExportMetadata, questions: Question[]) {
+  const classLevel = toOrdinalClassLevel(
+    metadata.classLevel ?? questions[0]?.classLevel,
+  );
+  const exam = metadata.exam ? EXAMS[metadata.exam] : null;
+  const examLabel = exam
+    ? `${exam.label}${exam.stream ? ` (${exam.stream})` : ""}`
+    : null;
+  return `${[classLevel, examLabel, metadata.title].filter(Boolean).join(" ")} paper analysis`;
+}
+
+function drawAnswerTableRow(
+  doc: jsPDF,
+  values: string[],
+  y: number,
+  widths: number[],
+  header = false,
+) {
+  doc.setFont("times", header ? "bold" : "normal");
+  doc.setFontSize(header ? 9.5 : 9);
+  const lineHeight = header ? 10.5 : 10;
+  const paddingX = 3;
+  const paddingY = 4;
+  const wrapped = values.map(
+    (value, index) =>
+      doc.splitTextToSize(
+        cleanCellValue(value),
+        widths[index]! - paddingX * 2,
+      ) as string[],
+  );
+  const height = Math.max(
+    header ? 54 : 24,
+    ...wrapped.map((lines) => lines.length * lineHeight + paddingY * 2),
+  );
+  let x = ANSWER_TABLE_LEFT;
+
+  doc.setDrawColor("#000000");
+  doc.setLineWidth(0.45);
+  wrapped.forEach((lines, index) => {
+    const width = widths[index]!;
+    doc.rect(x, y, width, height);
+    const textY =
+      y + (height - lines.length * lineHeight) / 2 + lineHeight * 0.78;
+    doc.text(lines, x + paddingX, textY, {
+      align: "left",
+      baseline: "alphabetic",
+    });
+    x += width;
+  });
+
+  return height;
+}
+
+function downloadAnswerKeyPdf(metadata: ExportMetadata, questions: Question[]) {
+  const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "landscape" });
+  const tableWidth = ANSWER_PAGE_WIDTH - ANSWER_TABLE_LEFT - ANSWER_TABLE_RIGHT;
+  const totalWeight = ANSWER_COLUMN_WEIGHTS.reduce(
+    (sum, width) => sum + width,
+    0,
+  );
+  const widths = ANSWER_COLUMN_WEIGHTS.map(
+    (width) => (width / totalWeight) * tableWidth,
+  );
+  const title = answerAnalysisTitle(metadata, questions);
+
+  doc.setTextColor("#000000");
+  doc.setFont("times", "bold");
+  doc.setFontSize(16);
+  doc.text(title, ANSWER_PAGE_WIDTH / 2, 28, { align: "center" });
+  const titleWidth = doc.getTextWidth(title);
+  doc.setLineWidth(0.7);
+  doc.line(
+    ANSWER_PAGE_WIDTH / 2 - titleWidth / 2,
+    31,
+    ANSWER_PAGE_WIDTH / 2 + titleWidth / 2,
+    31,
+  );
+
+  let y = ANSWER_TABLE_TOP;
+  y += drawAnswerTableRow(doc, ANSWER_HEADERS, y, widths, true);
+
+  questions.forEach((question, index) => {
+    const values = answerRow(question, index);
+    doc.setFont("times", "normal");
+    doc.setFontSize(9);
+    const estimatedHeight = Math.max(
+      24,
+      ...values.map((value, valueIndex) => {
+        const lines = doc.splitTextToSize(
+          cleanCellValue(value),
+          widths[valueIndex]! - 6,
+        ) as string[];
+        return lines.length * 10 + 8;
+      }),
+    );
+
+    if (y + estimatedHeight > ANSWER_TABLE_BOTTOM) {
+      doc.addPage("a4", "landscape");
+      y = 36;
+    }
+    y += drawAnswerTableRow(doc, values, y, widths);
+  });
+
+  doc.save(`${fileBase(metadata.title, "answers")}.pdf`);
 }
 
 function shouldUseOptionGrid(question: Question) {
@@ -251,14 +411,14 @@ function drawPdfFirstPageHeader(
   content: ExportContent,
   logo: HTMLImageElement,
 ) {
-  doc.addImage(logo, "PNG", 18, 12, 72, 58);
+  doc.addImage(logo, "PNG", 20, 12, 58, 58);
   doc.setTextColor("#000000");
 
   doc.setFont("times", "bold");
   doc.setFontSize(14);
   doc.text(SCHOOL_MOTTO, PDF_PAGE_WIDTH / 2, 28, { align: "center" });
 
-  doc.setFontSize(21);
+  doc.setFontSize(15.5);
   doc.text(SCHOOL_NAME, PDF_PAGE_WIDTH / 2, 50, { align: "center" });
 
   doc.setFontSize(13);
@@ -305,6 +465,11 @@ async function downloadPaperPdf(
   questions: Question[],
   content: ExportContent = "full",
 ) {
+  if (content === "answers") {
+    downloadAnswerKeyPdf(metadata, questions);
+    return;
+  }
+
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const logo = await loadSchoolLogoImage();
   const contentWidth = PDF_PAGE_WIDTH - PDF_MARGINS.left - PDF_MARGINS.right;

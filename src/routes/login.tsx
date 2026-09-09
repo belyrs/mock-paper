@@ -10,9 +10,15 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       { title: "Login — MockPaper" },
-      { name: "description", content: "Log in to generate JEE and NEET question papers instantly." },
+      {
+        name: "description",
+        content: "Log in to generate JEE and NEET question papers instantly.",
+      },
       { property: "og:title", content: "Login — MockPaper" },
-      { property: "og:description", content: "Access your MockPaper question generator." },
+      {
+        property: "og:description",
+        content: "Access your MockPaper question generator.",
+      },
     ],
   }),
   component: LoginPage,
@@ -30,7 +36,8 @@ function LoginPage() {
     e.preventDefault();
     const next: Record<string, string> = {};
     if (!email.trim()) next["email"] = "Email is required.";
-    else if (!/^\S+@\S+\.\S+$/.test(email)) next["email"] = "Enter a valid email address.";
+    else if (!/^\S+@\S+\.\S+$/.test(email))
+      next["email"] = "Enter a valid email address.";
     if (!password) next["password"] = "Password is required.";
     setErrors(next);
     if (Object.keys(next).length) return;
@@ -48,7 +55,10 @@ function LoginPage() {
   };
 
   return (
-    <AuthShell title="Welcome back" subtitle="Log in to continue generating question papers.">
+    <AuthShell
+      title="Welcome back"
+      subtitle="Log in to continue generating question papers."
+    >
       <form onSubmit={submit} noValidate className="space-y-4">
         <Field label="Email" error={errors["email"]}>
           <Input
@@ -77,8 +87,12 @@ function LoginPage() {
             try {
               const reset = await requestPasswordReset(email.trim());
               if (reset.previewUrl) {
-                const token = new URL(reset.previewUrl).searchParams.get("token");
-                toast.success("Reset link generated. Redirecting to the password reset form.");
+                const token = new URL(reset.previewUrl).searchParams.get(
+                  "token",
+                );
+                toast.success(
+                  "Reset link generated. Redirecting to the password reset form.",
+                );
                 if (token) {
                   void navigate({
                     to: "/reset-password",
@@ -90,14 +104,23 @@ function LoginPage() {
                 toast.success("Password reset link sent.");
               }
             } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Password reset failed");
+              toast.error(
+                error instanceof Error
+                  ? error.message
+                  : "Password reset failed",
+              );
             }
           }}
           className="text-sm font-medium text-primary hover:underline"
         >
           Forgot Password?
         </button>
-        <Button type="submit" size="lg" className="w-full" disabled={submitting}>
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full"
+          disabled={submitting}
+        >
           {submitting ? "Logging in..." : "Login"}
         </Button>
       </form>
@@ -121,13 +144,18 @@ export function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-soft-gradient glow-field min-h-[calc(100vh-4rem)] px-4 py-14 sm:px-6 sm:py-20">
+    <div className="app-canvas min-h-[calc(100vh-4rem)] px-4 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto w-full max-w-md">
-        <div className="card-surface card-glow p-6 sm:p-8">
-          <span className="eyebrow text-primary">MockPaper</span>
-          <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{title}</h1>
-          <p className="mt-2 mb-7 text-sm text-muted-foreground">{subtitle}</p>
-          {children}
+        <div className="card-surface card-glow overflow-hidden border-gold/35">
+          <div className="h-2 bg-gold-gradient" />
+          <div className="p-6 sm:p-8">
+            <span className="eyebrow text-primary">MockPaper Studio</span>
+            <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{title}</h1>
+            <p className="mt-2 mb-7 text-sm text-muted-foreground">
+              {subtitle}
+            </p>
+            {children}
+          </div>
         </div>
       </div>
     </div>

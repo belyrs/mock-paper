@@ -14,7 +14,8 @@ function isFallbackEligible(error) {
         return false;
     }
     const status = Number(error.details?.status ?? 0);
-    return [401, 402, 408, 409, 422, 429, 500, 502, 503, 504].includes(status) || status === 0;
+    return ([401, 402, 408, 409, 422, 429, 500, 502, 503, 504].includes(status) ||
+        status === 0);
 }
 class ResilientQuestionGenerationProvider {
     primaryProvider;
@@ -46,9 +47,11 @@ class ResilientQuestionGenerationProvider {
                     fallback: {
                         attemptedProvider: "openai",
                         fallbackProvider: fallbackResult.provider,
-                        reason: error instanceof Error ? error.message : "Unknown provider failure",
+                        reason: error instanceof Error
+                            ? error.message
+                            : "Unknown provider failure",
                         errorCode: error instanceof app_error_1.AppError ? error.code : "UNKNOWN_PROVIDER_ERROR",
-                        errorDetails: error instanceof app_error_1.AppError ? error.details ?? null : null,
+                        errorDetails: error instanceof app_error_1.AppError ? (error.details ?? null) : null,
                     },
                 },
             };
@@ -71,6 +74,12 @@ class ResilientQuestionGenerationProvider {
             return this.fallbackProvider.embedTexts(texts);
         }
         throw new Error("No embedding provider is available for semantic duplicate detection.");
+    }
+    async reviewQuestions(request, questions) {
+        if (!this.primaryProvider.reviewQuestions) {
+            throw new app_error_1.AppError(503, "ACADEMIC_REVIEW_UNAVAILABLE", "The configured generation provider does not support independent academic review.");
+        }
+        return this.primaryProvider.reviewQuestions(request, questions);
     }
 }
 exports.ResilientQuestionGenerationProvider = ResilientQuestionGenerationProvider;

@@ -21,6 +21,8 @@ export interface GeneratedQuestionCandidate {
   bloomsTaxonomyLevel: string;
   examRelevance: ExamRelevanceMap;
   sourceReference?: string | null;
+  solutionOutline?: string;
+  difficultyRationale?: string;
 }
 
 export interface GenerationSyllabusContext {
@@ -33,6 +35,7 @@ export interface GenerationSyllabusContext {
   commonMisconceptions: string[];
   questionPatterns: string[];
   validationKeywords: string[];
+  difficultyGuidance?: Partial<Record<Difficulty, string[]>>;
 }
 
 export interface GenerationPlanSlot {
@@ -40,6 +43,7 @@ export interface GenerationPlanSlot {
   difficulty: Difficulty;
   concept: string;
   pattern: string;
+  questionForm: string;
   learningOutcome: string;
 }
 
@@ -53,6 +57,7 @@ export interface ProviderUsageMetrics {
 export interface ProviderCallMetrics {
   provider: string;
   model: string;
+  callCount?: number;
   latencyMs: number;
   promptCharacters: number;
   responseCharacters: number;
@@ -73,6 +78,26 @@ export interface EmbeddingCallResult {
   usage?: EmbeddingUsageMetrics;
 }
 
+export interface QuestionQualityReview {
+  candidateIndex: number;
+  accepted: boolean;
+  independentCorrectOption: "A" | "B" | "C" | "D" | null;
+  syllabusAligned: boolean;
+  unambiguous: boolean;
+  difficultyAligned: boolean;
+  metadataAligned: boolean;
+  verificationSummary: string;
+  issues: string[];
+}
+
+export interface QuestionQualityReviewResult {
+  provider: string;
+  model: string;
+  reviews: QuestionQualityReview[];
+  rawResponse: Record<string, unknown>;
+  metrics?: ProviderCallMetrics;
+}
+
 export interface GenerationProviderRequest {
   subject: string;
   classLevel: ClassLevel;
@@ -82,6 +107,7 @@ export interface GenerationProviderRequest {
   questionCount: number;
   difficultyMix: DifficultyMix;
   difficultyCounts?: DifficultyMix;
+  selectionDifficultyCounts?: DifficultyMix;
   historicalAnalysis: HistoricalAnalysisSummary;
   previousQuestions: string[];
   syllabusContext: GenerationSyllabusContext;
@@ -91,6 +117,7 @@ export interface GenerationProviderRequest {
     acceptedQuestionTexts: string[];
     rejectedQuestionTexts: string[];
     rejectionReasons: string[];
+    requiredDifficultyCounts: DifficultyMix;
   };
 }
 
@@ -106,8 +133,14 @@ export interface GenerationProviderResult {
 }
 
 export interface QuestionGenerationProvider {
-  generate(request: GenerationProviderRequest): Promise<GenerationProviderResult>;
+  generate(
+    request: GenerationProviderRequest,
+  ): Promise<GenerationProviderResult>;
   embedTexts?(texts: string[]): Promise<EmbeddingCallResult>;
+  reviewQuestions?(
+    request: GenerationProviderRequest,
+    questions: ValidatedQuestionPayload[],
+  ): Promise<QuestionQualityReviewResult>;
 }
 
 export interface ValidatedQuestionPayload {

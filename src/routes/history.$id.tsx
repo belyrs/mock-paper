@@ -37,7 +37,7 @@ function HistoryDetail() {
 
   if (!paper) {
     return (
-      <div className="bg-soft-gradient glow-field flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
+      <div className="app-canvas flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
         <div className="card-surface card-glow max-w-md p-10 text-center">
           <h1 className="text-2xl font-bold">Paper not found</h1>
           <p className="mt-2 text-sm text-muted-foreground">
@@ -52,7 +52,7 @@ function HistoryDetail() {
   }
 
   return (
-    <div className="bg-soft-gradient glow-field min-h-[calc(100vh-4rem)] px-4 py-12 sm:px-6">
+    <div className="app-canvas min-h-[calc(100vh-4rem)] px-4 py-12 sm:px-6">
       <div className="mx-auto max-w-3xl">
         <Link
           to="/profile"

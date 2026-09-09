@@ -35,7 +35,10 @@ export const Route = createFileRoute("/generate/configure")({
           "Set chapter, sub-topic, number of questions and difficulty for each subject before generating.",
       },
       { property: "og:title", content: "Configure Your Paper — MockPaper" },
-      { property: "og:description", content: "Fine-tune your paper before generating." },
+      {
+        property: "og:description",
+        content: "Fine-tune your paper before generating.",
+      },
     ],
   }),
   component: ConfigurePage,
@@ -51,13 +54,17 @@ function validateConfig(
   const e: Record<string, string> = {};
   const chapterOptions = getChapterOptions(classLevel, subject);
   if (!cfg.chapter.trim()) e["chapter"] = "Chapter is required.";
-  else if (chapterOptions.length > 0 && !chapterOptions.includes(cfg.chapter.trim())) {
+  else if (
+    chapterOptions.length > 0 &&
+    !chapterOptions.includes(cfg.chapter.trim())
+  ) {
     e["chapter"] = "Please select a valid chapter.";
   }
   if (!cfg.subTopic.trim()) e["subTopic"] = "Sub-topic is required.";
   if (!cfg.numberOfQuestions || cfg.numberOfQuestions < 1)
     e["numberOfQuestions"] = "Enter a valid number of questions (1 or more).";
-  else if (cfg.numberOfQuestions > 50) e["numberOfQuestions"] = "Maximum 50 questions.";
+  else if (cfg.numberOfQuestions > 50)
+    e["numberOfQuestions"] = "Maximum 50 questions.";
   const mixTotal = DIFFICULTIES.reduce((a, d) => a + (cfg.mix?.[d] ?? 0), 0);
   if (mixTotal !== 100) e["mix"] = "Difficulty percentages must total 100%.";
   return e;
@@ -102,7 +109,11 @@ function ConfigurePage() {
     if (mode === "full-paper") {
       const next: Errors = {};
       for (const s of subjects) {
-        const errs = validateConfig(fullPaperConfig[s] ?? emptySubjectConfig(), classLevel, s);
+        const errs = validateConfig(
+          fullPaperConfig[s] ?? emptySubjectConfig(),
+          classLevel,
+          s,
+        );
         if (Object.keys(errs).length) next[s] = errs;
       }
       setErrors(next);
@@ -115,7 +126,11 @@ function ConfigurePage() {
         await generatePaper();
       });
     } else {
-      const errs = validateConfig(individualConfig, classLevel, individualSubject);
+      const errs = validateConfig(
+        individualConfig,
+        classLevel,
+        individualSubject,
+      );
       if (!individualSubject) errs["subject"] = "Subject is required.";
       setErrors(Object.keys(errs).length ? { individual: errs } : {});
       if (Object.keys(errs).length) return;
@@ -132,7 +147,8 @@ function ConfigurePage() {
       await navigate({ to: "/generate/paper" });
     } catch (error) {
       setGenerating(false);
-      const message = error instanceof Error ? error.message : "Paper generation failed";
+      const message =
+        error instanceof Error ? error.message : "Paper generation failed";
       setGenerationError(message);
       toast.error(message);
     }
@@ -140,7 +156,13 @@ function ConfigurePage() {
 
   if (generating) return <GeneratingState />;
   if (generationError) {
-    return <GenerationFailureState message={generationError} onRetry={run} onEdit={() => setGenerationError(null)} />;
+    return (
+      <GenerationFailureState
+        message={generationError}
+        onRetry={run}
+        onEdit={() => setGenerationError(null)}
+      />
+    );
   }
 
   const headline =
@@ -169,7 +191,10 @@ function ConfigurePage() {
               const cfg = fullPaperConfig[s] ?? emptySubjectConfig();
               const e = errors[s] ?? {};
               return (
-                <section key={s} className="card-surface p-5 transition-shadow duration-200 hover:shadow-[var(--shadow-lift)] sm:p-6">
+                <section
+                  key={s}
+                  className="card-surface p-5 transition-shadow duration-200 hover:shadow-[var(--shadow-lift)] sm:p-6"
+                >
                   <h2 className="eyebrow flex items-center gap-2 text-primary">
                     <span className="bg-gold-gradient inline-block size-2 rounded-full" />
                     {s}
@@ -199,7 +224,10 @@ function ConfigurePage() {
           <section className="card-surface space-y-4 p-5 sm:p-6">
             <div className="space-y-1.5">
               <Label htmlFor="subject">Subject</Label>
-              <Select value={individualSubject} onValueChange={handleIndividualSubjectChange}>
+              <Select
+                value={individualSubject}
+                onValueChange={handleIndividualSubjectChange}
+              >
                 <SelectTrigger id="subject" className="w-full">
                   <SelectValue placeholder="Select subject" />
                 </SelectTrigger>
@@ -278,7 +306,9 @@ function ConfigFields({
           </SelectContent>
         </Select>
         {errors["chapter"] && (
-          <p className="text-xs font-medium text-destructive">{errors["chapter"]}</p>
+          <p className="text-xs font-medium text-destructive">
+            {errors["chapter"]}
+          </p>
         )}
       </div>
       <div className="space-y-1.5">
@@ -290,7 +320,9 @@ function ConfigFields({
           onChange={(e) => onChange({ subTopic: e.target.value })}
         />
         {errors["subTopic"] && (
-          <p className="text-xs font-medium text-destructive">{errors["subTopic"]}</p>
+          <p className="text-xs font-medium text-destructive">
+            {errors["subTopic"]}
+          </p>
         )}
       </div>
       <div className="space-y-1.5">
@@ -300,11 +332,17 @@ function ConfigFields({
           type="number"
           min={1}
           max={50}
-          value={Number.isFinite(cfg.numberOfQuestions) ? cfg.numberOfQuestions : ""}
-          onChange={(e) => onChange({ numberOfQuestions: Number(e.target.value) })}
+          value={
+            Number.isFinite(cfg.numberOfQuestions) ? cfg.numberOfQuestions : ""
+          }
+          onChange={(e) =>
+            onChange({ numberOfQuestions: Number(e.target.value) })
+          }
         />
         {errors["numberOfQuestions"] && (
-          <p className="text-xs font-medium text-destructive">{errors["numberOfQuestions"]}</p>
+          <p className="text-xs font-medium text-destructive">
+            {errors["numberOfQuestions"]}
+          </p>
         )}
       </div>
       <DifficultyMixSliders
@@ -313,7 +351,9 @@ function ConfigFields({
         total={cfg.numberOfQuestions}
         onChange={(mix) => onChange({ mix })}
       />
-      {errors["mix"] && <p className="text-xs font-medium text-destructive">{errors["mix"]}</p>}
+      {errors["mix"] && (
+        <p className="text-xs font-medium text-destructive">{errors["mix"]}</p>
+      )}
     </>
   );
 }
@@ -338,10 +378,12 @@ function GenerationFailureState({
   onEdit: () => void;
 }) {
   return (
-    <div className="bg-soft-gradient flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
+    <div className="app-canvas flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
       <div className="card-surface max-w-lg p-10 text-center">
         <AlertCircle className="mx-auto size-10 text-destructive" />
-        <h1 className="mt-6 text-2xl font-bold">Paper generation needs another try</h1>
+        <h1 className="mt-6 text-2xl font-bold">
+          Paper generation needs another try
+        </h1>
         <p className="mt-3 text-sm text-muted-foreground">{message}</p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Button onClick={onRetry} className="gap-2">

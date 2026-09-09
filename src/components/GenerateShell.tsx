@@ -25,26 +25,35 @@ export function GenerateShell({
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (hydrated && !sessionLoading && !user) void navigate({ to: "/login", replace: true });
+    if (hydrated && !sessionLoading && !user)
+      void navigate({ to: "/login", replace: true });
   }, [hydrated, sessionLoading, user, navigate]);
 
   if (!hydrated || sessionLoading || !user) {
     return (
-      <div className="bg-soft-gradient flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
+      <div className="app-canvas flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
         <div className="flex items-center gap-3 text-sm font-medium text-muted-foreground">
-          <Loader2 className="size-4 animate-spin text-primary" /> Checking your session…
+          <Loader2 className="size-4 animate-spin text-primary" /> Checking your
+          session…
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-soft-gradient glow-field min-h-[calc(100vh-4rem)] px-4 py-10 sm:px-6 sm:py-12">
+    <div className="app-canvas min-h-[calc(100vh-4rem)] px-4 py-8 sm:px-6 sm:py-10">
       <div className="mx-auto max-w-5xl">
-        <Stepper current={step} />
-        <div className="mt-8">
+        <div className="rounded-2xl border border-primary/10 bg-surface/90 p-3 shadow-[var(--shadow-card)] backdrop-blur sm:p-4">
+          <Stepper current={step} />
+        </div>
+        <div className="mt-8 border-l-4 border-gold pl-5 sm:pl-6">
           {back && (
-            <Button asChild variant="ghost" size="sm" className="-ml-2 mb-3 gap-1 text-muted-foreground">
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="-ml-2 mb-3 gap-1 text-primary hover:bg-gold-soft"
+            >
               <Link to={back.to}>
                 <ChevronLeft className="size-4" /> {back.label}
               </Link>
@@ -53,9 +62,13 @@ export function GenerateShell({
           {titleSlot ? (
             <div className="text-3xl font-bold sm:text-4xl">{titleSlot}</div>
           ) : (
-            <h1 className="text-3xl font-bold text-balance sm:text-4xl">{title}</h1>
+            <h1 className="text-3xl font-bold text-balance sm:text-4xl">
+              {title}
+            </h1>
           )}
-          {subtitle && <p className="mt-2.5 max-w-2xl text-muted-foreground">{subtitle}</p>}
+          {subtitle && (
+            <p className="mt-2.5 max-w-2xl text-muted-foreground">{subtitle}</p>
+          )}
         </div>
         <div className="mt-8">{children}</div>
       </div>
@@ -97,7 +110,9 @@ export function ChoiceCard({
         )}
       />
       <h2 className="text-xl font-bold">{title}</h2>
-      {description && <p className="mt-1.5 text-sm text-muted-foreground">{description}</p>}
+      {description && (
+        <p className="mt-1.5 text-sm text-muted-foreground">{description}</p>
+      )}
       {meta && <div className="mt-4">{meta}</div>}
     </button>
   );

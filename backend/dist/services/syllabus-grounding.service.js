@@ -22,7 +22,9 @@ function buildGenericContext(subject, chapter, subTopic) {
         canonicalMatch: false,
         matchScore: 0,
         summary: `${subTopic} within ${chapter} for ${subject}, using the teacher-provided topic labels because no local syllabus-grounding entry was matched.`,
-        coreConcepts: keywords.length > 0 ? keywords.map((keyword) => `${subTopic}: ${keyword}`) : [subTopic],
+        coreConcepts: keywords.length > 0
+            ? keywords.map((keyword) => `${subTopic}: ${keyword}`)
+            : [subTopic],
         learningOutcomes: [
             `Generate questions that genuinely require knowledge of ${subTopic}.`,
             `Ensure the reasoning stays within ${chapter} for ${subject}.`,
@@ -36,6 +38,15 @@ function buildGenericContext(subject, chapter, subTopic) {
             `Exam-style MCQs with one defensible answer and plausible distractors.`,
         ],
         validationKeywords: keywords,
+        difficultyGuidance: {
+            Easy: [`Use a direct or one-step application of ${subTopic}.`],
+            Medium: [
+                `Require at least two linked reasoning steps grounded in ${subTopic}.`,
+            ],
+            Hard: [
+                `Require a non-routine multi-step application, multiple constraints, or close-alternative analysis grounded in ${subTopic}.`,
+            ],
+        },
     };
 }
 function scoreEntry(entry, subject, chapter, subTopic) {
@@ -47,7 +58,8 @@ function scoreEntry(entry, subject, chapter, subTopic) {
     const normalizedSubTopic = (0, normalization_1.normalizeTopicKey)(subTopic);
     const chapterScore = entry.chapterNormalized === normalizedChapter
         ? 1
-        : Math.max((0, normalization_1.jaccardSimilarity)(entry.chapter, chapter), entry.chapterNormalized.includes(normalizedChapter) || normalizedChapter.includes(entry.chapterNormalized)
+        : Math.max((0, normalization_1.jaccardSimilarity)(entry.chapter, chapter), entry.chapterNormalized.includes(normalizedChapter) ||
+            normalizedChapter.includes(entry.chapterNormalized)
             ? 0.7
             : 0);
     const subTopicScore = entry.subTopicNormalized === normalizedSubTopic
@@ -77,6 +89,7 @@ class SyllabusGroundingService {
             commonMisconceptions: bestMatch.entry.commonMisconceptions,
             questionPatterns: bestMatch.entry.questionPatterns,
             validationKeywords: bestMatch.entry.validationKeywords,
+            difficultyGuidance: bestMatch.entry.difficultyGuidance,
         };
     }
 }

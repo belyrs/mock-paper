@@ -2,7 +2,11 @@ import {
   SYLLABUS_GROUNDING_ENTRIES,
   type SyllabusGroundingEntry,
 } from "../data/syllabus-grounding";
-import { jaccardSimilarity, normalizeText, normalizeTopicKey } from "../utils/normalization";
+import {
+  jaccardSimilarity,
+  normalizeText,
+  normalizeTopicKey,
+} from "../utils/normalization";
 
 export interface ResolvedSyllabusContext {
   entryKey: string | null;
@@ -14,6 +18,7 @@ export interface ResolvedSyllabusContext {
   commonMisconceptions: string[];
   questionPatterns: string[];
   validationKeywords: string[];
+  difficultyGuidance?: Partial<Record<"Easy" | "Medium" | "Hard", string[]>>;
 }
 
 function tokenizeKeywords(value: string) {
@@ -26,7 +31,11 @@ function tokenizeKeywords(value: string) {
   );
 }
 
-function buildGenericKeywords(subject: string, chapter: string, subTopic: string) {
+function buildGenericKeywords(
+  subject: string,
+  chapter: string,
+  subTopic: string,
+) {
   return Array.from(
     new Set([
       ...tokenizeKeywords(subject),
@@ -36,14 +45,21 @@ function buildGenericKeywords(subject: string, chapter: string, subTopic: string
   );
 }
 
-function buildGenericContext(subject: string, chapter: string, subTopic: string): ResolvedSyllabusContext {
+function buildGenericContext(
+  subject: string,
+  chapter: string,
+  subTopic: string,
+): ResolvedSyllabusContext {
   const keywords = buildGenericKeywords(subject, chapter, subTopic);
   return {
     entryKey: null,
     canonicalMatch: false,
     matchScore: 0,
     summary: `${subTopic} within ${chapter} for ${subject}, using the teacher-provided topic labels because no local syllabus-grounding entry was matched.`,
-    coreConcepts: keywords.length > 0 ? keywords.map((keyword) => `${subTopic}: ${keyword}`) : [subTopic],
+    coreConcepts:
+      keywords.length > 0
+        ? keywords.map((keyword) => `${subTopic}: ${keyword}`)
+        : [subTopic],
     learningOutcomes: [
       `Generate questions that genuinely require knowledge of ${subTopic}.`,
       `Ensure the reasoning stays within ${chapter} for ${subject}.`,
@@ -57,6 +73,15 @@ function buildGenericContext(subject: string, chapter: string, subTopic: string)
       `Exam-style MCQs with one defensible answer and plausible distractors.`,
     ],
     validationKeywords: keywords,
+    difficultyGuidance: {
+      Easy: [`Use a direct or one-step application of ${subTopic}.`],
+      Medium: [
+        `Require at least two linked reasoning steps grounded in ${subTopic}.`,
+      ],
+      Hard: [
+        `Require a non-routine multi-step application, multiple constraints, or close-alternative analysis grounded in ${subTopic}.`,
+      ],
+    },
   };
 }
 
@@ -66,7 +91,8 @@ function scoreEntry(
   chapter: string,
   subTopic: string,
 ) {
-  const subjectMatch = normalizeTopicKey(entry.subject) === normalizeTopicKey(subject) ? 1 : 0;
+  const subjectMatch =
+    normalizeTopicKey(entry.subject) === normalizeTopicKey(subject) ? 1 : 0;
   if (subjectMatch === 0) {
     return 0;
   }
@@ -78,7 +104,8 @@ function scoreEntry(
       ? 1
       : Math.max(
           jaccardSimilarity(entry.chapter, chapter),
-          entry.chapterNormalized.includes(normalizedChapter) || normalizedChapter.includes(entry.chapterNormalized)
+          entry.chapterNormalized.includes(normalizedChapter) ||
+            normalizedChapter.includes(entry.chapterNormalized)
             ? 0.7
             : 0,
         );
@@ -97,14 +124,27 @@ function scoreEntry(
 }
 
 export class SyllabusGroundingService {
-  resolve(payload: { subject: string; chapter: string; subTopic: string }): ResolvedSyllabusContext {
+  resolve(payload: {
+    subject: string;
+    chapter: string;
+    subTopic: string;
+  }): ResolvedSyllabusContext {
     const bestMatch = SYLLABUS_GROUNDING_ENTRIES.map((entry) => ({
       entry,
-      score: scoreEntry(entry, payload.subject, payload.chapter, payload.subTopic),
+      score: scoreEntry(
+        entry,
+        payload.subject,
+        payload.chapter,
+        payload.subTopic,
+      ),
     })).sort((left, right) => right.score - left.score)[0];
 
     if (!bestMatch || bestMatch.score < 0.45) {
-      return buildGenericContext(payload.subject, payload.chapter, payload.subTopic);
+      return buildGenericContext(
+        payload.subject,
+        payload.chapter,
+        payload.subTopic,
+      );
     }
 
     return {
@@ -117,6 +157,7 @@ export class SyllabusGroundingService {
       commonMisconceptions: bestMatch.entry.commonMisconceptions,
       questionPatterns: bestMatch.entry.questionPatterns,
       validationKeywords: bestMatch.entry.validationKeywords,
+      difficultyGuidance: bestMatch.entry.difficultyGuidance,
     };
   }
 }

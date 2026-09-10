@@ -467,6 +467,157 @@ describe("MockPaper backend services", () => {
     ).toThrowError(/internal preparation terminology/i);
   });
 
+  it("does not reject valid full-chapter questions when no curated concept map exists", () => {
+    const syllabusGroundingService = new SyllabusGroundingService();
+    const syllabusContext = syllabusGroundingService.resolve({
+      subject: "Chemistry",
+      chapter: "Amines",
+      subTopic: "Full Chapter",
+    });
+    const request: GenerationProviderRequest = {
+      subject: "Chemistry",
+      classLevel: "Class 12",
+      chapter: "Amines",
+      subTopic: "Full Chapter",
+      targetExams: ["JEE_MAIN"],
+      questionCount: 1,
+      difficultyMix: { Easy: 0, Medium: 100, Hard: 0 },
+      difficultyCounts: { Easy: 0, Medium: 1, Hard: 0 },
+      historicalAnalysis: {
+        mode: "model_knowledge_fallback",
+        totalRelevantQuestions: 0,
+        yearsCovered: [],
+        trendSummary: "No imported dataset.",
+        recurringConcepts: [],
+        difficultyNotes: [],
+        sourceDetails: [],
+      },
+      previousQuestions: [],
+      syllabusContext,
+      generationPlan: buildGenerationPlan({
+        subject: "Chemistry",
+        chapter: "Amines",
+        subTopic: "Full Chapter",
+        questionCount: 1,
+        difficultyMix: { Easy: 0, Medium: 100, Hard: 0 },
+        difficultyCounts: { Easy: 0, Medium: 1, Hard: 0 },
+        syllabusContext,
+      }),
+    };
+
+    expect(syllabusContext.canonicalMatch).toBe(false);
+    expect(syllabusContext.coreConcepts).toEqual(["Amines"]);
+    expect(syllabusContext.validationKeywords).not.toContain("full");
+    expect(syllabusContext.validationKeywords).not.toContain("chapter");
+
+    const [question] = validateProviderOutput(request, {
+      rawPrompt: "test",
+      rawResponse: {},
+      provider: "test",
+      model: "test",
+      historicalAnalysisMode: "model_knowledge_fallback",
+      historicalAnalysisSummary: "No imported dataset.",
+      questions: [
+        {
+          questionNumber: 1,
+          difficulty: "Medium",
+          questionText:
+            "An organic compound gives a precipitate with benzenesulfonyl chloride that dissolves in aqueous alkali. Which class does it belong to?",
+          options: [
+            "Primary aliphatic amine",
+            "Secondary aliphatic amine",
+            "Tertiary aliphatic amine",
+            "Quaternary ammonium salt",
+          ],
+          correctOption: "A",
+          conceptTested: "Hinsberg test",
+          commonMistake:
+            "Confusing the alkali solubility of primary and secondary sulfonamides.",
+          recommendedRemedialAction:
+            "Revise the products and solubility observations in the Hinsberg test.",
+          learningOutcome:
+            "Classify an organic nitrogen compound using a qualitative test.",
+          bloomsTaxonomyLevel: "Application",
+          examRelevance: { JEE_MAIN: "High" },
+          sourceReference: "NCERT Class 12 Chemistry - Amines",
+        },
+      ],
+    });
+
+    expect(question?.conceptTested).toBe("Hinsberg test");
+    expect(question?.metadata.syllabusGroundingValidation).toBe(
+      "provider-grounded",
+    );
+  });
+
+  it("keeps strict topic checks for curated syllabus grounding", () => {
+    const syllabusGroundingService = new SyllabusGroundingService();
+    const syllabusContext = syllabusGroundingService.resolve({
+      subject: "Physics",
+      chapter: "Units and Measurements",
+      subTopic: "Dimensional Analysis and Applications",
+    });
+    const request: GenerationProviderRequest = {
+      subject: "Physics",
+      classLevel: "Class 11",
+      chapter: "Units and Measurements",
+      subTopic: "Dimensional Analysis and Applications",
+      targetExams: ["JEE_MAIN"],
+      questionCount: 1,
+      difficultyMix: { Easy: 100, Medium: 0, Hard: 0 },
+      difficultyCounts: { Easy: 1, Medium: 0, Hard: 0 },
+      historicalAnalysis: {
+        mode: "model_knowledge_fallback",
+        totalRelevantQuestions: 0,
+        yearsCovered: [],
+        trendSummary: "No imported dataset.",
+        recurringConcepts: [],
+        difficultyNotes: [],
+        sourceDetails: [],
+      },
+      previousQuestions: [],
+      syllabusContext,
+      generationPlan: buildGenerationPlan({
+        subject: "Physics",
+        chapter: "Units and Measurements",
+        subTopic: "Dimensional Analysis and Applications",
+        questionCount: 1,
+        difficultyMix: { Easy: 100, Medium: 0, Hard: 0 },
+        difficultyCounts: { Easy: 1, Medium: 0, Hard: 0 },
+        syllabusContext,
+      }),
+    };
+
+    expect(() =>
+      validateProviderOutput(request, {
+        rawPrompt: "test",
+        rawResponse: {},
+        provider: "test",
+        model: "test",
+        historicalAnalysisMode: "model_knowledge_fallback",
+        historicalAnalysisSummary: "No imported dataset.",
+        questions: [
+          {
+            questionNumber: 1,
+            difficulty: "Easy",
+            questionText: "Which cell organelle contains digestive enzymes?",
+            options: ["Lysosome", "Ribosome", "Centrosome", "Nucleolus"],
+            correctOption: "A",
+            conceptTested: "Functions of cell organelles",
+            commonMistake: "Confusing lysosomes with ribosomes.",
+            recommendedRemedialAction:
+              "Revise the functions of membrane-bound cell organelles.",
+            learningOutcome:
+              "Identify organelles from their cellular function.",
+            bloomsTaxonomyLevel: "Understanding",
+            examRelevance: { JEE_MAIN: "N/A" },
+            sourceReference: "NCERT Biology",
+          },
+        ],
+      }),
+    ).toThrowError(/selected syllabus topic/i);
+  });
+
   it("normalizes answer-letter drift and strips inline options from generated stems", () => {
     const syllabusGroundingService = new SyllabusGroundingService();
     const request = {
@@ -606,8 +757,17 @@ describe("MockPaper backend services", () => {
     expect(serialized).not.toHaveProperty("generationProvider");
     expect(serialized).not.toHaveProperty("generationModel");
     expect(serialized).not.toHaveProperty("promptVersion");
-    expect(serialized).not.toHaveProperty("historicalAnalysisMode");
-    expect(serialized).not.toHaveProperty("historicalAnalysisSummary");
+    expect(serialized.historicalAnalysisMode).toBe("Curriculum aligned");
+    expect(serialized.historicalAnalysisSummary).toEqual({
+      mode: "Curriculum aligned",
+      totalRelevantQuestions: 0,
+      yearsCovered: [],
+      trendSummary:
+        "Questions are aligned with the selected subject, chapter, subtopic, and examination pattern.",
+      recurringConcepts: [],
+      difficultyNotes: [],
+      sourceDetails: [],
+    });
     expect(serialized).not.toHaveProperty("validationSummary");
     expect(serialized).not.toHaveProperty("notes");
     expect(serialized.questions[0]).not.toHaveProperty("generationProvider");

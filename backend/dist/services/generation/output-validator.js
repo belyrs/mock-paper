@@ -228,6 +228,10 @@ function conceptAlignsWithGrounding(question, request) {
                 questionContext.includes(normalizedKeyword)));
     });
 }
+function hasCuratedSyllabusGrounding(request) {
+    return (request.syllabusContext.canonicalMatch &&
+        request.syllabusContext.entryKey !== null);
+}
 function keywordOverlap(left, right) {
     const leftTokens = new Set(left.split(" ").filter((token) => token.length >= 4));
     const rightTokens = new Set(right.split(" ").filter((token) => token.length >= 4));
@@ -309,7 +313,8 @@ function validateProviderOutput(request, result) {
                 subTopic: request.subTopic,
             });
         }
-        if (!hasEnoughTopicGrounding(sanitizedQuestion, request)) {
+        if (hasCuratedSyllabusGrounding(request) &&
+            !hasEnoughTopicGrounding(sanitizedQuestion, request)) {
             throw new app_error_1.AppError(502, "ACADEMIC_VALIDATION_FAILED", "The generated question does not appear to test the selected syllabus topic strongly enough.", {
                 questionNumber: question.questionNumber,
                 subject: request.subject,
@@ -318,7 +323,8 @@ function validateProviderOutput(request, result) {
                 validationKeywords: request.syllabusContext.validationKeywords,
             });
         }
-        if (!conceptAlignsWithGrounding(sanitizedQuestion, request)) {
+        if (hasCuratedSyllabusGrounding(request) &&
+            !conceptAlignsWithGrounding(sanitizedQuestion, request)) {
             throw new app_error_1.AppError(502, "ACADEMIC_VALIDATION_FAILED", "The generated concept label does not align with the grounded syllabus concepts for this topic.", {
                 questionNumber: question.questionNumber,
                 subject: request.subject,
@@ -363,6 +369,9 @@ function validateProviderOutput(request, result) {
                 generationPlanSlot: request.generationPlan[index] ?? null,
                 historicalAnalysisMode: result.historicalAnalysisMode,
                 historicalAnalysisSummary: result.historicalAnalysisSummary,
+                syllabusGroundingValidation: hasCuratedSyllabusGrounding(request)
+                    ? "curated"
+                    : "provider-grounded",
                 solutionOutline: sanitizedQuestion.solutionOutline ?? null,
                 difficultyRationale: sanitizedQuestion.difficultyRationale ?? null,
             },

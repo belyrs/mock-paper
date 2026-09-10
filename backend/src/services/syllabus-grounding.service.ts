@@ -36,12 +36,26 @@ function buildGenericKeywords(
   chapter: string,
   subTopic: string,
 ) {
+  const normalizedSubTopic = normalizeTopicKey(subTopic);
+  const isFullChapter = [
+    "full",
+    "full chapter",
+    "whole chapter",
+    "entire chapter",
+  ].includes(normalizedSubTopic);
+
   return Array.from(
     new Set([
-      ...tokenizeKeywords(subject),
       ...tokenizeKeywords(chapter),
-      ...tokenizeKeywords(subTopic),
+      ...(isFullChapter ? [] : tokenizeKeywords(subTopic)),
+      ...tokenizeKeywords(subject),
     ]),
+  );
+}
+
+function isFullChapterSelection(subTopic: string) {
+  return ["full", "full chapter", "whole chapter", "entire chapter"].includes(
+    normalizeTopicKey(subTopic),
   );
 }
 
@@ -51,35 +65,38 @@ function buildGenericContext(
   subTopic: string,
 ): ResolvedSyllabusContext {
   const keywords = buildGenericKeywords(subject, chapter, subTopic);
+  const fullChapter = isFullChapterSelection(subTopic);
+  const syllabusFocus = fullChapter ? chapter : subTopic;
+  const syllabusBoundary = fullChapter
+    ? `the full ${chapter} chapter`
+    : `${subTopic} within ${chapter}`;
+
   return {
     entryKey: null,
     canonicalMatch: false,
     matchScore: 0,
-    summary: `${subTopic} within ${chapter} for ${subject}, using the teacher-provided topic labels because no local syllabus-grounding entry was matched.`,
-    coreConcepts:
-      keywords.length > 0
-        ? keywords.map((keyword) => `${subTopic}: ${keyword}`)
-        : [subTopic],
+    summary: `${syllabusBoundary} for ${subject}. Cover only academically established concepts from this selected syllabus boundary.`,
+    coreConcepts: [syllabusFocus],
     learningOutcomes: [
-      `Generate questions that genuinely require knowledge of ${subTopic}.`,
+      `Apply subject knowledge from ${syllabusBoundary}.`,
       `Ensure the reasoning stays within ${chapter} for ${subject}.`,
     ],
     commonMisconceptions: [
-      `Using ${subject} terminology without testing the actual ${subTopic} concept.`,
+      `Using ${subject} terminology without testing the actual ${syllabusFocus} concept.`,
       `Returning generic template text instead of a solvable ${chapter} question.`,
     ],
     questionPatterns: [
-      `Conceptual and application-focused questions grounded in ${subTopic}.`,
+      `Conceptual and application-focused questions grounded in ${syllabusBoundary}.`,
       `Exam-style MCQs with one defensible answer and plausible distractors.`,
     ],
     validationKeywords: keywords,
     difficultyGuidance: {
-      Easy: [`Use a direct or one-step application of ${subTopic}.`],
+      Easy: [`Use a direct or one-step application from ${syllabusBoundary}.`],
       Medium: [
-        `Require at least two linked reasoning steps grounded in ${subTopic}.`,
+        `Require at least two linked reasoning steps grounded in ${syllabusBoundary}.`,
       ],
       Hard: [
-        `Require a non-routine multi-step application, multiple constraints, or close-alternative analysis grounded in ${subTopic}.`,
+        `Require a non-routine multi-step application, multiple constraints, or close-alternative analysis grounded in ${syllabusBoundary}.`,
       ],
     },
   };

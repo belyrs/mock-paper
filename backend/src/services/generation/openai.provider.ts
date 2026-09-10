@@ -87,7 +87,6 @@ const QUESTION_SCHEMA = {
     examRelevance: EXAM_RELEVANCE_SCHEMA,
     sourceReference: { type: ["string", "null"] },
     solutionOutline: { type: "string", minLength: 8 },
-    difficultyRationale: { type: "string", minLength: 8 },
   },
   required: [
     "questionNumber",
@@ -103,7 +102,6 @@ const QUESTION_SCHEMA = {
     "examRelevance",
     "sourceReference",
     "solutionOutline",
-    "difficultyRationale",
   ],
 } as const;
 
@@ -116,18 +114,9 @@ const GENERATION_RESPONSE_FORMAT = {
       type: "object",
       additionalProperties: false,
       properties: {
-        historicalAnalysisMode: {
-          type: "string",
-          enum: ["imported_dataset", "model_knowledge_fallback", "mixed"],
-        },
-        historicalAnalysisSummary: { type: "string" },
         questions: { type: "array", items: QUESTION_SCHEMA },
       },
-      required: [
-        "historicalAnalysisMode",
-        "historicalAnalysisSummary",
-        "questions",
-      ],
+      required: ["questions"],
     },
   },
 } as const;
@@ -187,6 +176,43 @@ function modelControls(
   return model.startsWith("gpt-5")
     ? { reasoning_effort: reasoningEffort, verbosity: "low" }
     : { temperature };
+}
+
+async function fetchOpenAi(
+  path: string,
+  init: RequestInit,
+  operation: "generation" | "review" | "embedding",
+) {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    env.OPENAI_REQUEST_TIMEOUT_MS,
+  );
+
+  try {
+    return await fetch(`${env.OPENAI_BASE_URL}${path}`, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const timedOut = controller.signal.aborted;
+    throw new AppError(
+      502,
+      timedOut ? "OPENAI_REQUEST_TIMEOUT" : "OPENAI_NETWORK_ERROR",
+      timedOut
+        ? `The OpenAI ${operation} request exceeded the configured timeout.`
+        : `The OpenAI ${operation} request could not be reached.`,
+      {
+        status: 0,
+        operation,
+        timeoutMs: env.OPENAI_REQUEST_TIMEOUT_MS,
+        reason:
+          error instanceof Error ? error.message : "Unknown network error",
+      },
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export class OpenAiQuestionGenerationProvider implements QuestionGenerationProvider {
@@ -379,33 +405,37 @@ export class OpenAiQuestionGenerationProvider implements QuestionGenerationProvi
       "Dispatching focused OpenAI generation batch.",
     );
 
-    const response = await fetch(`${env.OPENAI_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+    const response = await fetchOpenAi(
+      "/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: env.OPENAI_MODEL,
+          ...modelControls(
+            env.OPENAI_MODEL,
+            env.OPENAI_GENERATION_REASONING_EFFORT,
+            env.QUESTION_GENERATION_TEMPERATURE,
+          ),
+          response_format: GENERATION_RESPONSE_FORMAT,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a careful educational content generator. Respond with JSON only and never include markdown fences. The field correctOption must be exactly one uppercase letter A, B, C, or D. The field questionText must contain only the stem and must never inline answer choices.",
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+        }),
       },
-      body: JSON.stringify({
-        model: env.OPENAI_MODEL,
-        ...modelControls(
-          env.OPENAI_MODEL,
-          env.OPENAI_GENERATION_REASONING_EFFORT,
-          env.QUESTION_GENERATION_TEMPERATURE,
-        ),
-        response_format: GENERATION_RESPONSE_FORMAT,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a careful educational content generator. Respond with JSON only and never include markdown fences. The field correctOption must be exactly one uppercase letter A, B, C, or D. The field questionText must contain only the stem and must never inline answer choices.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      }),
-    });
+      "generation",
+    );
 
     if (!response.ok) {
       const body = await response.text();
@@ -697,30 +727,34 @@ export class OpenAiQuestionGenerationProvider implements QuestionGenerationProvi
       "Dispatching focused academic review batch.",
     );
 
-    const response = await fetch(`${env.OPENAI_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+    const response = await fetchOpenAi(
+      "/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: env.OPENAI_REVIEW_MODEL,
+          ...modelControls(
+            env.OPENAI_REVIEW_MODEL,
+            env.OPENAI_REVIEW_REASONING_EFFORT,
+            0,
+          ),
+          response_format: REVIEW_RESPONSE_FORMAT,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a strict independent academic examiner and answer-key auditor. Review every candidate, solve it independently, and return JSON only.",
+            },
+            { role: "user", content: prompt },
+          ],
+        }),
       },
-      body: JSON.stringify({
-        model: env.OPENAI_REVIEW_MODEL,
-        ...modelControls(
-          env.OPENAI_REVIEW_MODEL,
-          env.OPENAI_REVIEW_REASONING_EFFORT,
-          0,
-        ),
-        response_format: REVIEW_RESPONSE_FORMAT,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a strict independent academic examiner and answer-key auditor. Review every candidate, solve it independently, and return JSON only.",
-          },
-          { role: "user", content: prompt },
-        ],
-      }),
-    });
+      "review",
+    );
 
     if (!response.ok) {
       const body = await response.text();
@@ -874,17 +908,21 @@ export class OpenAiQuestionGenerationProvider implements QuestionGenerationProvi
     }
 
     const startedAt = Date.now();
-    const response = await fetch(`${env.OPENAI_BASE_URL}/embeddings`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+    const response = await fetchOpenAi(
+      "/embeddings",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: env.OPENAI_EMBEDDING_MODEL,
+          input: texts,
+        }),
       },
-      body: JSON.stringify({
-        model: env.OPENAI_EMBEDDING_MODEL,
-        input: texts,
-      }),
-    });
+      "embedding",
+    );
 
     if (!response.ok) {
       const body = await response.text();

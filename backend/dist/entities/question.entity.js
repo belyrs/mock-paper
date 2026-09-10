@@ -177,7 +177,9 @@ __decorate([
 ], Question.prototype, "metadata", void 0);
 exports.Question = Question = __decorate([
     (0, typeorm_1.Entity)({ name: "questions" }),
-    (0, typeorm_1.Index)("questions_normalized_hash_unique", ["normalizedHash"], { unique: true }),
+    (0, typeorm_1.Index)("questions_paper_normalized_hash_unique", ["paperId", "normalizedHash"], {
+        unique: true,
+    }),
     (0, typeorm_1.Index)("questions_structural_fingerprint_idx", ["structuralFingerprint"])
 ], Question);
 //# sourceMappingURL=question.entity.js.map

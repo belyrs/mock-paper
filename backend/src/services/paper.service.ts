@@ -1,6 +1,10 @@
 import { AppError } from "../errors/app-error";
 import { logger } from "../config/logger";
-import type { GeneratePaperInput, RenamePaperInput, UpdateQuestionInput } from "../dtos/paper.dto";
+import type {
+  GeneratePaperInput,
+  RenamePaperInput,
+  UpdateQuestionInput,
+} from "../dtos/paper.dto";
 import { PaperRepository } from "../repositories/paper.repository";
 import { QuestionRepository } from "../repositories/question.repository";
 import { GenerationRunRepository } from "../repositories/generation-run.repository";
@@ -15,6 +19,7 @@ import { Paper } from "../entities/paper.entity";
 import { Question } from "../entities/question.entity";
 import { GenerationRun } from "../entities/generation-run.entity";
 import { UserRepository } from "../repositories/user.repository";
+import type { DataSource } from "typeorm";
 
 function defaultTitle(input: GeneratePaperInput) {
   return [
@@ -26,7 +31,7 @@ function defaultTitle(input: GeneratePaperInput) {
 }
 
 function targetExamsFromExam(exam: GeneratePaperInput["exam"]) {
-  return exam === "JEE" ? ["JEE_MAIN"] as const : ["NEET"] as const;
+  return exam === "JEE" ? (["JEE_MAIN"] as const) : (["NEET"] as const);
 }
 
 export class PaperService {
@@ -36,6 +41,7 @@ export class PaperService {
     private readonly userRepository: UserRepository,
     private readonly questionGenerationService: QuestionGenerationService,
     private readonly generationRunRepository: GenerationRunRepository,
+    private readonly dataSource: DataSource,
   ) {}
 
   async listPapers(userId: string) {
@@ -43,10 +49,17 @@ export class PaperService {
   }
 
   async getPaper(userId: string, paperId: string) {
-    const paper = await this.paperRepository.findActiveByIdForUser(paperId, userId);
+    const paper = await this.paperRepository.findActiveByIdForUser(
+      paperId,
+      userId,
+    );
 
     if (!paper) {
-      throw new AppError(404, "PAPER_NOT_FOUND", "The requested paper could not be found.");
+      throw new AppError(
+        404,
+        "PAPER_NOT_FOUND",
+        "The requested paper could not be found.",
+      );
     }
 
     return paper;
@@ -66,10 +79,16 @@ export class PaperService {
 
     const user = await this.userRepository.findById(userId);
     if (!user) {
-      throw new AppError(401, "USER_NOT_FOUND", "The signed-in account could not be found.");
+      throw new AppError(
+        401,
+        "USER_NOT_FOUND",
+        "The signed-in account could not be found.",
+      );
     }
 
-    const targetExams = input.targetExams?.length ? input.targetExams : [...targetExamsFromExam(input.exam)];
+    const targetExams = input.targetExams?.length
+      ? input.targetExams
+      : [...targetExamsFromExam(input.exam)];
     const generationRuns: GenerationRun[] = [];
     const historicalModes = new Set<string>();
     const historicalDetails: unknown[] = [];
@@ -87,12 +106,13 @@ export class PaperService {
           "Generating questions for subject within paper.",
         );
 
-        const subjectResult = await this.questionGenerationService.generateForSubject({
-          subjectConfiguration: configuration,
-          classLevel: input.classLevel,
-          targetExams,
-          previousQuestionTexts: [],
-        });
+        const subjectResult =
+          await this.questionGenerationService.generateForSubject({
+            subjectConfiguration: configuration,
+            classLevel: input.classLevel,
+            targetExams,
+            previousQuestionTexts: [],
+          });
 
         logger.info(
           {
@@ -156,7 +176,9 @@ export class PaperService {
       );
 
       allQuestions.push(...questionEntities);
-      generationRuns.push(this.generationRunRepository.create(subjectResult.generationRun));
+      generationRuns.push(
+        this.generationRunRepository.create(subjectResult.generationRun),
+      );
     }
 
     const paper = this.paperRepository.create({
@@ -175,20 +197,29 @@ export class PaperService {
       historicalAnalysisMode:
         historicalModes.size > 1
           ? "mixed"
-          : (([...historicalModes][0] ?? "model_knowledge_fallback") as Paper["historicalAnalysisMode"]),
+          : (([...historicalModes][0] ??
+              "model_knowledge_fallback") as Paper["historicalAnalysisMode"]),
       historicalAnalysisSummary: {
         mode:
           historicalModes.size > 1
             ? "mixed"
-            : (([...historicalModes][0] ?? "model_knowledge_fallback") as Paper["historicalAnalysisMode"]),
+            : (([...historicalModes][0] ??
+                "model_knowledge_fallback") as Paper["historicalAnalysisMode"]),
         totalRelevantQuestions: historicalDetails.reduce(
           (sum: number, detail) =>
-            sum + Number((detail as { totalRelevantQuestions?: number }).totalRelevantQuestions ?? 0),
+            sum +
+            Number(
+              (detail as { totalRelevantQuestions?: number })
+                .totalRelevantQuestions ?? 0,
+            ),
           0 as number,
         ),
         yearsCovered: [
           ...new Set(
-            historicalDetails.flatMap((detail) => (detail as { yearsCovered?: number[] }).yearsCovered ?? []),
+            historicalDetails.flatMap(
+              (detail) =>
+                (detail as { yearsCovered?: number[] }).yearsCovered ?? [],
+            ),
           ),
         ].sort((left, right) => left - right),
         trendSummary: historicalDetails
@@ -198,43 +229,59 @@ export class PaperService {
         recurringConcepts: [
           ...new Set(
             historicalDetails.flatMap(
-              (detail) => (detail as { recurringConcepts?: string[] }).recurringConcepts ?? [],
+              (detail) =>
+                (detail as { recurringConcepts?: string[] })
+                  .recurringConcepts ?? [],
             ),
           ),
         ],
         difficultyNotes: historicalDetails.flatMap(
-          (detail) => (detail as { difficultyNotes?: string[] }).difficultyNotes ?? [],
+          (detail) =>
+            (detail as { difficultyNotes?: string[] }).difficultyNotes ?? [],
         ),
         sourceDetails: historicalDetails.flatMap(
-          (detail) => (detail as { sourceDetails?: string[] }).sourceDetails ?? [],
+          (detail) =>
+            (detail as { sourceDetails?: string[] }).sourceDetails ?? [],
         ),
       },
       validationSummary: {
         generatedQuestionCount: allQuestions.length,
         subjectCount: input.subjects.length,
-        subjectMetrics: subjectResults.map(({ configuration, subjectResult }) => ({
-          subject: configuration.subject,
-          chapter: configuration.chapter,
-          subTopic: configuration.subTopic,
-          metrics: subjectResult.generationRun.validationReport.metrics ?? null,
-        })),
+        subjectMetrics: subjectResults.map(
+          ({ configuration, subjectResult }) => ({
+            subject: configuration.subject,
+            chapter: configuration.chapter,
+            subTopic: configuration.subTopic,
+            metrics:
+              subjectResult.generationRun.validationReport.metrics ?? null,
+          }),
+        ),
       },
       notes: {
         historicalDetails,
       },
     });
 
-    const savedPaper = await this.paperRepository.save(paper);
-    const savedQuestions = await this.questionRepository.saveMany(
-      allQuestions.map((question) => Object.assign(question, { paperId: savedPaper.id })),
-    );
+    const { savedPaper, savedQuestions } = await this.dataSource.transaction(
+      async (manager) => {
+        const persistedPaper = await manager.save(Paper, paper);
+        const questionsToSave = allQuestions.map((question) =>
+          Object.assign(question, { paperId: persistedPaper.id }),
+        );
+        const runsToSave = generationRuns.map((generationRun) =>
+          Object.assign(generationRun, { paperId: persistedPaper.id }),
+        );
+        const persistedQuestions = await manager.save(
+          Question,
+          questionsToSave,
+        );
+        await manager.save(GenerationRun, runsToSave);
 
-    for (const generationRun of generationRuns) {
-      generationRun.paperId = savedPaper.id;
-    }
-
-    await this.generationRunRepository.saveMany(
-      generationRuns.map((generationRun) => Object.assign(generationRun, { paperId: savedPaper.id })),
+        return {
+          savedPaper: persistedPaper,
+          savedQuestions: persistedQuestions,
+        };
+      },
     );
 
     logger.info(
@@ -250,7 +297,9 @@ export class PaperService {
 
     return {
       ...savedPaper,
-      questions: savedQuestions.sort((left, right) => left.position - right.position),
+      questions: savedQuestions.sort(
+        (left, right) => left.position - right.position,
+      ),
     };
   }
 
@@ -278,26 +327,38 @@ export class PaperService {
     });
   }
 
-  async updateQuestion(userId: string, paperId: string, questionId: string, input: UpdateQuestionInput) {
+  async updateQuestion(
+    userId: string,
+    paperId: string,
+    questionId: string,
+    input: UpdateQuestionInput,
+  ) {
     const paper = await this.getPaper(userId, paperId);
     const question = paper.questions.find((item) => item.id === questionId);
 
     if (!question) {
-      throw new AppError(404, "QUESTION_NOT_FOUND", "The requested question could not be found.");
+      throw new AppError(
+        404,
+        "QUESTION_NOT_FOUND",
+        "The requested question could not be found.",
+      );
     }
 
     const normalizedText = normalizeText(input.text);
     const normalizedHash = hashNormalizedText(input.text);
 
-    const relevantQuestions = await this.questionRepository.findRelevantForDeduplication({
-      subject: question.subject,
-      classLevel: question.classLevel,
-      chapterNormalized: question.chapterNormalized,
-      subTopicNormalized: question.subTopicNormalized,
-    });
+    const relevantQuestions =
+      await this.questionRepository.findRelevantForDeduplication({
+        subject: question.subject,
+        classLevel: question.classLevel,
+        chapterNormalized: question.chapterNormalized,
+        subTopicNormalized: question.subTopicNormalized,
+      });
 
     const conflictingQuestion = relevantQuestions.find(
-      (existing) => existing.id !== question.id && existing.normalizedHash === normalizedHash,
+      (existing) =>
+        existing.id !== question.id &&
+        existing.normalizedHash === normalizedHash,
     );
 
     if (conflictingQuestion) {
@@ -328,36 +389,51 @@ export class PaperService {
     return this.getPaper(userId, paperId);
   }
 
-  async regenerateQuestion(userId: string, paperId: string, questionId: string) {
+  async regenerateQuestion(
+    userId: string,
+    paperId: string,
+    questionId: string,
+  ) {
     const paper = await this.getPaper(userId, paperId);
     const question = paper.questions.find((item) => item.id === questionId);
 
     if (!question) {
-      throw new AppError(404, "QUESTION_NOT_FOUND", "The requested question could not be found.");
+      throw new AppError(
+        404,
+        "QUESTION_NOT_FOUND",
+        "The requested question could not be found.",
+      );
     }
 
-    const subjectResult = await this.questionGenerationService.generateForSubject({
-      subjectConfiguration: {
-        subject: question.subject,
-        chapter: question.chapter,
-        subTopic: question.subTopic,
-        numberOfQuestions: 1,
-        mix: {
-          Easy: question.difficulty === "Easy" ? 100 : 0,
-          Medium: question.difficulty === "Medium" ? 100 : 0,
-          Hard: question.difficulty === "Hard" ? 100 : 0,
+    const subjectResult =
+      await this.questionGenerationService.generateForSubject({
+        subjectConfiguration: {
+          subject: question.subject,
+          chapter: question.chapter,
+          subTopic: question.subTopic,
+          numberOfQuestions: 1,
+          mix: {
+            Easy: question.difficulty === "Easy" ? 100 : 0,
+            Medium: question.difficulty === "Medium" ? 100 : 0,
+            Hard: question.difficulty === "Hard" ? 100 : 0,
+          },
         },
-      },
-      classLevel: paper.classLevel,
-      targetExams: paper.targetExams,
-      previousQuestionTexts: paper.questions.filter((item) => item.id !== question.id).map((item) => item.text),
-      excludePaperId: paper.id,
-      excludeQuestionId: question.id,
-    });
+        classLevel: paper.classLevel,
+        targetExams: paper.targetExams,
+        previousQuestionTexts: paper.questions
+          .filter((item) => item.id !== question.id)
+          .map((item) => item.text),
+        excludePaperId: paper.id,
+        excludeQuestionId: question.id,
+      });
 
     const replacement = subjectResult.questions[0];
     if (!replacement) {
-      throw new AppError(502, "QUESTION_REGEN_FAILED", "Failed to regenerate the requested question.");
+      throw new AppError(
+        502,
+        "QUESTION_REGEN_FAILED",
+        "Failed to regenerate the requested question.",
+      );
     }
 
     question.text = replacement.text;

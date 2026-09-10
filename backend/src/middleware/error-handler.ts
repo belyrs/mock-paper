@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../errors/app-error";
+import { toPublicError } from "../errors/public-error";
 import { logger } from "../config/logger";
 
 export function errorHandler(
@@ -23,11 +24,7 @@ export function errorHandler(
     }
 
     return response.status(error.statusCode).json({
-      error: {
-        code: error.code,
-        message: error.message,
-        details: error.details ?? null,
-      },
+      error: toPublicError(error),
     });
   }
 

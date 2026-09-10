@@ -43,19 +43,14 @@ class QuestionRepository {
     findRelevantForDeduplication(payload) {
         return this.repository
             .find({
-            where: [
-                {
-                    subject: payload.subject,
-                    classLevel: payload.classLevel,
-                    chapterNormalized: payload.chapterNormalized,
-                },
-                {
-                    subject: payload.subject,
-                    classLevel: payload.classLevel,
-                    subTopicNormalized: payload.subTopicNormalized,
-                },
-            ],
-            relations: { paper: true },
+            where: {
+                subject: payload.subject,
+                classLevel: payload.classLevel,
+                chapterNormalized: payload.chapterNormalized,
+                subTopicNormalized: payload.subTopicNormalized,
+            },
+            order: { createdAt: "DESC" },
+            take: payload.limit ?? 40,
         })
             .then((questions) => payload.excludePaperId
             ? questions.filter((question) => question.paperId !== payload.excludePaperId)

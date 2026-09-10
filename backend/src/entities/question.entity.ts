@@ -10,7 +10,13 @@ import type {
 } from "../constants/domain";
 
 @Entity({ name: "questions" })
-@Index("questions_normalized_hash_unique", ["normalizedHash"], { unique: true })
+@Index(
+  "questions_paper_normalized_hash_unique",
+  ["paperId", "normalizedHash"],
+  {
+    unique: true,
+  },
+)
 @Index("questions_structural_fingerprint_idx", ["structuralFingerprint"])
 export class Question extends BaseEntity {
   @Column({ type: "uuid" })

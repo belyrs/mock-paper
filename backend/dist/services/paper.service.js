@@ -4,6 +4,9 @@ exports.PaperService = void 0;
 const app_error_1 = require("../errors/app-error");
 const logger_1 = require("../config/logger");
 const normalization_1 = require("../utils/normalization");
+const paper_entity_1 = require("../entities/paper.entity");
+const question_entity_1 = require("../entities/question.entity");
+const generation_run_entity_1 = require("../entities/generation-run.entity");
 function defaultTitle(input) {
     return [
         input.exam,
@@ -21,12 +24,14 @@ class PaperService {
     userRepository;
     questionGenerationService;
     generationRunRepository;
-    constructor(paperRepository, questionRepository, userRepository, questionGenerationService, generationRunRepository) {
+    dataSource;
+    constructor(paperRepository, questionRepository, userRepository, questionGenerationService, generationRunRepository, dataSource) {
         this.paperRepository = paperRepository;
         this.questionRepository = questionRepository;
         this.userRepository = userRepository;
         this.questionGenerationService = questionGenerationService;
         this.generationRunRepository = generationRunRepository;
+        this.dataSource = dataSource;
     }
     async listPapers(userId) {
         return this.paperRepository.findAllActiveForUser(userId);
@@ -50,7 +55,9 @@ class PaperService {
         if (!user) {
             throw new app_error_1.AppError(401, "USER_NOT_FOUND", "The signed-in account could not be found.");
         }
-        const targetExams = input.targetExams?.length ? input.targetExams : [...targetExamsFromExam(input.exam)];
+        const targetExams = input.targetExams?.length
+            ? input.targetExams
+            : [...targetExamsFromExam(input.exam)];
         const generationRuns = [];
         const historicalModes = new Set();
         const historicalDetails = [];
@@ -136,12 +143,16 @@ class PaperService {
             promptVersion: generationRuns[0]?.promptVersion ?? "unknown",
             historicalAnalysisMode: historicalModes.size > 1
                 ? "mixed"
-                : ([...historicalModes][0] ?? "model_knowledge_fallback"),
+                : ([...historicalModes][0] ??
+                    "model_knowledge_fallback"),
             historicalAnalysisSummary: {
                 mode: historicalModes.size > 1
                     ? "mixed"
-                    : ([...historicalModes][0] ?? "model_knowledge_fallback"),
-                totalRelevantQuestions: historicalDetails.reduce((sum, detail) => sum + Number(detail.totalRelevantQuestions ?? 0), 0),
+                    : ([...historicalModes][0] ??
+                        "model_knowledge_fallback"),
+                totalRelevantQuestions: historicalDetails.reduce((sum, detail) => sum +
+                    Number(detail
+                        .totalRelevantQuestions ?? 0), 0),
                 yearsCovered: [
                     ...new Set(historicalDetails.flatMap((detail) => detail.yearsCovered ?? [])),
                 ].sort((left, right) => left - right),
@@ -150,7 +161,8 @@ class PaperService {
                     .filter(Boolean)
                     .join(" "),
                 recurringConcepts: [
-                    ...new Set(historicalDetails.flatMap((detail) => detail.recurringConcepts ?? [])),
+                    ...new Set(historicalDetails.flatMap((detail) => detail
+                        .recurringConcepts ?? [])),
                 ],
                 difficultyNotes: historicalDetails.flatMap((detail) => detail.difficultyNotes ?? []),
                 sourceDetails: historicalDetails.flatMap((detail) => detail.sourceDetails ?? []),
@@ -169,12 +181,17 @@ class PaperService {
                 historicalDetails,
             },
         });
-        const savedPaper = await this.paperRepository.save(paper);
-        const savedQuestions = await this.questionRepository.saveMany(allQuestions.map((question) => Object.assign(question, { paperId: savedPaper.id })));
-        for (const generationRun of generationRuns) {
-            generationRun.paperId = savedPaper.id;
-        }
-        await this.generationRunRepository.saveMany(generationRuns.map((generationRun) => Object.assign(generationRun, { paperId: savedPaper.id })));
+        const { savedPaper, savedQuestions } = await this.dataSource.transaction(async (manager) => {
+            const persistedPaper = await manager.save(paper_entity_1.Paper, paper);
+            const questionsToSave = allQuestions.map((question) => Object.assign(question, { paperId: persistedPaper.id }));
+            const runsToSave = generationRuns.map((generationRun) => Object.assign(generationRun, { paperId: persistedPaper.id }));
+            const persistedQuestions = await manager.save(question_entity_1.Question, questionsToSave);
+            await manager.save(generation_run_entity_1.GenerationRun, runsToSave);
+            return {
+                savedPaper: persistedPaper,
+                savedQuestions: persistedQuestions,
+            };
+        });
         logger_1.logger.info({
             userId,
             paperId: savedPaper.id,
@@ -222,7 +239,8 @@ class PaperService {
             chapterNormalized: question.chapterNormalized,
             subTopicNormalized: question.subTopicNormalized,
         });
-        const conflictingQuestion = relevantQuestions.find((existing) => existing.id !== question.id && existing.normalizedHash === normalizedHash);
+        const conflictingQuestion = relevantQuestions.find((existing) => existing.id !== question.id &&
+            existing.normalizedHash === normalizedHash);
         if (conflictingQuestion) {
             throw new app_error_1.AppError(409, "QUESTION_DUPLICATE", "The edited question duplicates an existing question in the question bank.");
         }
@@ -264,7 +282,9 @@ class PaperService {
             },
             classLevel: paper.classLevel,
             targetExams: paper.targetExams,
-            previousQuestionTexts: paper.questions.filter((item) => item.id !== question.id).map((item) => item.text),
+            previousQuestionTexts: paper.questions
+                .filter((item) => item.id !== question.id)
+                .map((item) => item.text),
             excludePaperId: paper.id,
             excludeQuestionId: question.id,
         });

@@ -3,6 +3,7 @@ import type { DataSource } from "typeorm";
 import supertest from "supertest";
 import { createApp } from "../src/app";
 import { AppError } from "../src/errors/app-error";
+import { toPublicError } from "../src/errors/public-error";
 import { AuthService } from "../src/services/auth.service";
 import { DuplicateDetectionService } from "../src/services/duplicate-detection.service";
 import { HistoricalAnalysisService } from "../src/services/historical-analysis.service";
@@ -16,7 +17,6 @@ import { validateProviderOutput } from "../src/services/generation/output-valida
 import { PaperService } from "../src/services/paper.service";
 import { PasswordResetService } from "../src/services/password-reset.service";
 import {
-  addRetryCandidateReserve,
   QuestionGenerationService,
   shouldAcceptAcademicReview,
 } from "../src/services/question-generation.service";
@@ -29,6 +29,7 @@ import { PaperRepository } from "../src/repositories/paper.repository";
 import { PasswordResetTokenRepository } from "../src/repositories/password-reset-token.repository";
 import { QuestionRepository } from "../src/repositories/question.repository";
 import { UserRepository } from "../src/repositories/user.repository";
+import { serializePaper } from "../src/utils/serializers";
 import {
   buildAuthCookieOptions,
   getAuthCookieOptions,
@@ -90,6 +91,7 @@ describe("MockPaper backend services", () => {
       userRepository,
       questionGenerationService,
       generationRunRepository,
+      dataSource,
     );
   });
 
@@ -179,6 +181,39 @@ describe("MockPaper backend services", () => {
     expect(result.success).toBe(false);
   });
 
+  it("sanitizes provider failures before they cross the API boundary", () => {
+    const providerFailure = new AppError(
+      502,
+      "OPENAI_REQUEST_FAILED",
+      "The OpenAI model failed because the API quota was exceeded.",
+      {
+        model: "gpt-5.2",
+        body: "provider response body",
+        promptTokens: 1200,
+      },
+    );
+
+    expect(toPublicError(providerFailure)).toEqual({
+      code: "QUESTION_PREPARATION_FAILED",
+      message: "We couldn't prepare the question paper. Please try again.",
+      details: null,
+    });
+    expect(
+      toPublicError(
+        new AppError(
+          502,
+          "OPENAI_REQUEST_TIMEOUT",
+          "The OpenAI generation request timed out.",
+        ),
+      ),
+    ).toEqual({
+      code: "QUESTION_PREPARATION_TIMEOUT",
+      message:
+        "Question paper preparation is taking longer than expected. Please try again.",
+      details: null,
+    });
+  });
+
   it("builds the canonical OpenAI prompt with dynamic syllabus fields", () => {
     const syllabusGroundingService = new SyllabusGroundingService();
     const prompt = buildQuestionPrompt({
@@ -220,9 +255,7 @@ describe("MockPaper backend services", () => {
       }),
     });
 
-    expect(prompt).toContain(
-      "Act as an expert faculty member and question paper setter for NEET, JEE Main, KCET, and CBSE Class 11/12 Physics",
-    );
+    expect(prompt).toContain("Act as an expert Physics faculty member");
     expect(prompt).toContain("Subject: Physics");
     expect(prompt).toContain("Class/Grade: Class 11");
     expect(prompt).toContain("Chapter: Units and Measurements");
@@ -235,21 +268,15 @@ describe("MockPaper backend services", () => {
     expect(prompt).toContain("Easy: 3 question(s)");
     expect(prompt).toContain("Medium: 5 question(s)");
     expect(prompt).toContain("Hard: 2 question(s)");
-    expect(prompt).toContain("Q[NUMBER]");
-    expect(prompt).toContain('"questions":[');
     expect(prompt).toContain("Syllabus grounding for this request:");
     expect(prompt).toContain("Dimensional formulae of physical quantities");
     expect(prompt).toContain("Difficulty guidance:");
-    expect(prompt).toContain("solutionOutline");
-    expect(prompt).toContain(
-      "applies to the complete paper, not to each focused provider sub-batch",
-    );
-    expect(prompt).toContain(
-      "Return at most one assertion-reason or statement-based question in this response",
-    );
+    expect(prompt).toContain("provide a concise solution outline");
+    expect(prompt).toContain("Return JSON only");
     expect(prompt).toContain(
       "Deterministic generation plan for diversity and coverage:",
     );
+    expect(prompt.length).toBeLessThan(10_000);
   });
 
   it("builds distinct retry-aware blueprints for a ten-question syllabus slice", () => {
@@ -289,20 +316,6 @@ describe("MockPaper backend services", () => {
           syllabusContext.difficultyGuidance?.Hard?.includes(slot.questionForm),
         ),
     ).toBe(true);
-    expect(
-      addRetryCandidateReserve({ Easy: 0, Medium: 0, Hard: 1 }, 2),
-    ).toEqual({
-      Easy: 0,
-      Medium: 0,
-      Hard: 2,
-    });
-    expect(
-      addRetryCandidateReserve({ Easy: 0, Medium: 0, Hard: 7 }, 2),
-    ).toEqual({
-      Easy: 0,
-      Medium: 0,
-      Hard: 10,
-    });
   });
 
   it("accepts only calibrated difficulty disagreements for otherwise valid hard questions", () => {
@@ -422,6 +435,36 @@ describe("MockPaper backend services", () => {
         ],
       }),
     ).toThrowError(/placeholder|synthetic internal metadata/i);
+
+    expect(() =>
+      validateProviderOutput(request, {
+        rawPrompt: "internal request",
+        rawResponse: {},
+        provider: "internal",
+        model: "internal",
+        historicalAnalysisMode: "model_knowledge_fallback",
+        historicalAnalysisSummary: "No imported dataset.",
+        questions: [
+          {
+            questionNumber: 1,
+            difficulty: "Easy",
+            questionText:
+              "Which dimensional formula correctly represents force?",
+            options: ["MLT^-2", "ML^2T^-2", "ML^-1T^-2", "LT^-1"],
+            correctOption: "A",
+            conceptTested: "Dimensional formulae of physical quantities",
+            commonMistake: "Using the dimensions of work instead of force",
+            recommendedRemedialAction:
+              "Derive force from mass multiplied by acceleration.",
+            learningOutcome:
+              "Identify dimensions from a defining physical relation.",
+            bloomsTaxonomyLevel: "Understanding",
+            examRelevance: { JEE_MAIN: "High" },
+            sourceReference: "OpenAI model output",
+          },
+        ],
+      }),
+    ).toThrowError(/internal preparation terminology/i);
   });
 
   it("normalizes answer-letter drift and strips inline options from generated stems", () => {
@@ -536,6 +579,46 @@ describe("MockPaper backend services", () => {
     expect(paper.historicalAnalysisMode).toBe("model_knowledge_fallback");
   });
 
+  it("keeps internal preparation metadata out of public paper responses", async () => {
+    const user = await createUser();
+    const paper = await paperService.generatePaper(user.id, {
+      exam: "JEE",
+      classLevel: "Class 11",
+      mode: "individual",
+      subjects: [
+        {
+          subject: "Physics",
+          chapter: "Units and Measurements",
+          subTopic: "Dimensional Analysis and Applications",
+          numberOfQuestions: 1,
+          mix: { Easy: 100, Medium: 0, Hard: 0 },
+        },
+      ],
+    });
+    const question = paper.questions[0]!;
+    question.commonMistake =
+      "Trusting the GPT model response without checking units.";
+    question.sourceReference = "OpenAI provider output";
+
+    const serialized = serializePaper(paper);
+    const serializedText = JSON.stringify(serialized);
+
+    expect(serialized).not.toHaveProperty("generationProvider");
+    expect(serialized).not.toHaveProperty("generationModel");
+    expect(serialized).not.toHaveProperty("promptVersion");
+    expect(serialized).not.toHaveProperty("historicalAnalysisMode");
+    expect(serialized).not.toHaveProperty("historicalAnalysisSummary");
+    expect(serialized).not.toHaveProperty("validationSummary");
+    expect(serialized).not.toHaveProperty("notes");
+    expect(serialized.questions[0]).not.toHaveProperty("generationProvider");
+    expect(serialized.questions[0]).not.toHaveProperty("generationModel");
+    expect(serialized.questions[0]).not.toHaveProperty("promptVersion");
+    expect(serialized.questions[0]?.sourceReference).toBeNull();
+    expect(serializedText).not.toMatch(
+      /OpenAI|ChatGPT|GPT|LLM|language model|provider output/i,
+    );
+  });
+
   it("keeps generating unique fallback questions for the same syllabus even after the provider restarts", async () => {
     const user = await createUser();
     const input = {
@@ -591,6 +674,68 @@ describe("MockPaper backend services", () => {
     ]);
 
     expect(generatedTexts.size).toBe(6);
+  });
+
+  it("fills a paper from the exact-syllabus question bank when generation is unavailable", async () => {
+    const user = await createUser();
+    const subjectConfiguration = {
+      subject: "Physics",
+      chapter: "Units and Measurements",
+      subTopic: "Dimensional Analysis and Applications",
+      numberOfQuestions: 3,
+      mix: { Easy: 34, Medium: 33, Hard: 33 },
+    } as const;
+    const existingPaper = await paperService.generatePaper(user.id, {
+      exam: "JEE",
+      classLevel: "Class 11",
+      mode: "individual",
+      subjects: [subjectConfiguration],
+    });
+    let callCount = 0;
+    const unavailableProvider = {
+      async generate() {
+        callCount += 1;
+        throw new AppError(
+          502,
+          "OPENAI_REQUEST_TIMEOUT",
+          "The OpenAI generation request timed out.",
+          { status: 0 },
+        );
+      },
+    };
+    const questionRepository = new QuestionRepository(dataSource);
+    const historicalRepository = new HistoricalRepository(dataSource);
+    const generationService = new QuestionGenerationService(
+      unavailableProvider,
+      new DuplicateDetectionService(
+        questionRepository,
+        historicalRepository,
+        unavailableProvider,
+      ),
+      new HistoricalAnalysisService(historicalRepository),
+      new SyllabusGroundingService(),
+    );
+    const fallbackPaperService = new PaperService(
+      new PaperRepository(dataSource),
+      questionRepository,
+      new UserRepository(dataSource),
+      generationService,
+      new GenerationRunRepository(dataSource),
+      dataSource,
+    );
+    const result = await fallbackPaperService.generatePaper(user.id, {
+      exam: "JEE",
+      classLevel: "Class 11",
+      mode: "individual",
+      subjects: [subjectConfiguration],
+    });
+
+    expect(callCount).toBe(2);
+    expect(result.questions).toHaveLength(3);
+    expect(result.generationProvider).toBe("question-bank-fallback");
+    expect(new Set(result.questions.map((question) => question.text))).toEqual(
+      new Set(existingPaper.questions.map((question) => question.text)),
+    );
   });
 
   it("keeps accepted questions and retries only the missing duplicate slots", async () => {
@@ -733,9 +878,9 @@ describe("MockPaper backend services", () => {
     });
 
     expect(result.questions).toHaveLength(3);
-    expect(requestedCounts).toEqual([3, 2]);
+    expect(requestedCounts).toEqual([3, 1]);
     expect(requestedDifficultyCounts[1]).toEqual({
-      Easy: 2,
+      Easy: 1,
       Medium: 0,
       Hard: 0,
     });
@@ -746,7 +891,7 @@ describe("MockPaper backend services", () => {
     ).toBe(false);
   });
 
-  it("rejects academically invalid candidates and repairs only the missing slots", async () => {
+  it("keeps valid candidates and repairs only malformed missing slots", async () => {
     const syllabusGroundingService = new SyllabusGroundingService();
     const syllabusContext = syllabusGroundingService.resolve({
       subject: "Physics",
@@ -795,8 +940,11 @@ describe("MockPaper backend services", () => {
         generationCall += 1;
         const questions =
           generationCall === 1
-            ? sourceQuestions.slice(0, 2)
-            : [sourceQuestions[0]!, sourceQuestions[2]!];
+            ? [
+                sourceQuestions[0]!,
+                { ...sourceQuestions[1]!, options: ["invalid"] },
+              ]
+            : [sourceQuestions[1]!];
         return {
           rawPrompt: `reviewed-${generationCall}`,
           rawResponse: { generationCall },
@@ -860,11 +1008,11 @@ describe("MockPaper backend services", () => {
     });
 
     expect(generationCall).toBe(2);
-    expect(reviewCall).toBe(2);
+    expect(reviewCall).toBe(0);
     expect(result.questions).toHaveLength(2);
     expect(result.questions.map((question) => question.text)).toEqual([
+      sourceQuestions[0]!.questionText,
       sourceQuestions[1]!.questionText,
-      sourceQuestions[2]!.questionText,
     ]);
   });
 
@@ -915,7 +1063,7 @@ describe("MockPaper backend services", () => {
     );
   });
 
-  it("rejects structural duplicates even when the numbers are changed", async () => {
+  it("keeps structurally similar questions when their normalized text differs", async () => {
     const syllabusGroundingService = new SyllabusGroundingService();
     const provider = new MockQuestionGenerationProvider();
     const questionRepository = new QuestionRepository(dataSource);
@@ -1015,8 +1163,8 @@ describe("MockPaper backend services", () => {
       historicalQuestions: [],
     });
 
-    expect(result.acceptedQuestions).toHaveLength(1);
-    expect(result.conflicts[0]?.source).toBe("accepted_attempt_structural");
+    expect(result.acceptedQuestions).toHaveLength(2);
+    expect(result.conflicts).toHaveLength(0);
   });
 
   it("supports password reset without a real mail provider in console mode", async () => {

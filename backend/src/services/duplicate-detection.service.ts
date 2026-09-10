@@ -15,8 +15,6 @@ import type {
   ValidatedQuestionPayload,
 } from "./generation/types";
 
-const DIRECT_LEXICAL_THRESHOLD = 0.9;
-const STRUCTURAL_DIRECT_THRESHOLD = 0.95;
 const SEMANTIC_PREFILTER_THRESHOLD = 0.45;
 const SEMANTIC_LEXICAL_GATE = 0.5;
 
@@ -95,7 +93,10 @@ function emptyMetrics(): DuplicateAssessmentMetrics {
   };
 }
 
-function addEmbeddingMetrics(metrics: DuplicateAssessmentMetrics, result: EmbeddingCallResult) {
+function addEmbeddingMetrics(
+  metrics: DuplicateAssessmentMetrics,
+  result: EmbeddingCallResult,
+) {
   metrics.embeddingCallCount += 1;
   metrics.embeddingInputCount += result.inputCount;
   metrics.embeddingPromptTokens += result.usage?.promptTokens ?? 0;
@@ -149,6 +150,24 @@ export class DuplicateDetectionService {
     };
   }
 
+  findReusableQuestions(payload: {
+    subject: string;
+    classLevel: ClassLevel;
+    chapter: string;
+    subTopic: string;
+    excludePaperId?: string;
+    limit?: number;
+  }) {
+    return this.questionRepository.findRelevantForDeduplication({
+      subject: payload.subject,
+      classLevel: payload.classLevel,
+      chapterNormalized: normalizeTopicKey(payload.chapter),
+      subTopicNormalized: normalizeTopicKey(payload.subTopic),
+      excludePaperId: payload.excludePaperId,
+      limit: payload.limit,
+    });
+  }
+
   async assessQuestions(
     questions: ValidatedQuestionPayload[],
     context: DuplicateContext,
@@ -162,7 +181,9 @@ export class DuplicateDetectionService {
     const lexicallyAccepted: ValidatedQuestionPayload[] = [];
     const seenCandidateHashes = new Set<string>();
     const acceptedReferences: TransientQuestionReference[] = [
-      ...(options?.transientQuestions ?? []).map((question) => ({ ...question })),
+      ...(options?.transientQuestions ?? []).map((question) => ({
+        ...question,
+      })),
     ];
 
     for (const question of questions) {
@@ -171,7 +192,8 @@ export class DuplicateDetectionService {
         conflicts.push({
           question,
           source: "generated_batch",
-          message: "Generated batch contains duplicate normalized question text.",
+          message:
+            "Generated batch contains duplicate normalized question text.",
         });
         continue;
       }
@@ -192,10 +214,16 @@ export class DuplicateDetectionService {
       }
 
       lexicallyAccepted.push(question);
-      acceptedReferences.push(this.toReference(question, `accepted-${acceptedReferences.length + 1}`));
+      acceptedReferences.push(
+        this.toReference(question, `accepted-${acceptedReferences.length + 1}`),
+      );
     }
 
-    if (!env.SEMANTIC_DEDUP_ENABLED || !this.provider.embedTexts || lexicallyAccepted.length === 0) {
+    if (
+      !env.SEMANTIC_DEDUP_ENABLED ||
+      !this.provider.embedTexts ||
+      lexicallyAccepted.length === 0
+    ) {
       return {
         acceptedQuestions: lexicallyAccepted,
         conflicts,
@@ -204,7 +232,9 @@ export class DuplicateDetectionService {
     }
 
     const semanticSeedReferences = [
-      ...(options?.transientQuestions ?? []).map((question) => ({ ...question })),
+      ...(options?.transientQuestions ?? []).map((question) => ({
+        ...question,
+      })),
     ];
 
     const selectedExistingIds = new Set<string>();
@@ -216,7 +246,10 @@ export class DuplicateDetectionService {
       const question = lexicallyAccepted[index]!;
 
       for (const existingQuestion of context.existingQuestions) {
-        if (options?.excludeQuestionId && existingQuestion.id === options.excludeQuestionId) {
+        if (
+          options?.excludeQuestionId &&
+          existingQuestion.id === options.excludeQuestionId
+        ) {
           continue;
         }
 
@@ -238,7 +271,12 @@ export class DuplicateDetectionService {
       }
 
       for (let priorIndex = 0; priorIndex < index; priorIndex += 1) {
-        if (this.shouldConsiderForSemanticCheck(question, lexicallyAccepted[priorIndex]!)) {
+        if (
+          this.shouldConsiderForSemanticCheck(
+            question,
+            lexicallyAccepted[priorIndex]!,
+          )
+        ) {
           pairwiseSemanticCandidateExists = true;
           break;
         }
@@ -262,9 +300,17 @@ export class DuplicateDetectionService {
       };
     }
 
-    const existingById = new Map(context.existingQuestions.map((question) => [question.id, { ...question }]));
+    const existingById = new Map(
+      context.existingQuestions.map((question) => [
+        question.id,
+        { ...question },
+      ]),
+    );
     const historicalById = new Map(
-      context.historicalQuestions.map((question) => [question.id, { ...question }]),
+      context.historicalQuestions.map((question) => [
+        question.id,
+        { ...question },
+      ]),
     );
     const transientById = new Map(
       semanticSeedReferences.map((question) => [question.id, { ...question }]),
@@ -276,36 +322,53 @@ export class DuplicateDetectionService {
       );
       addEmbeddingMetrics(metrics, generatedEmbeddingResult);
       lexicallyAccepted.forEach((question, index) => {
-        question.semanticEmbedding = generatedEmbeddingResult.embeddings[index] ?? [];
+        question.semanticEmbedding =
+          generatedEmbeddingResult.embeddings[index] ?? [];
       });
 
       const missingExisting = [...selectedExistingIds]
         .map((id) => existingById.get(id))
-        .filter((question): question is DuplicateReference => Boolean(question && !question.semanticEmbedding));
+        .filter((question): question is DuplicateReference =>
+          Boolean(question && !question.semanticEmbedding),
+        );
       const missingHistorical = [...selectedHistoricalIds]
         .map((id) => historicalById.get(id))
-        .filter((question): question is DuplicateReference => Boolean(question && !question.semanticEmbedding));
+        .filter((question): question is DuplicateReference =>
+          Boolean(question && !question.semanticEmbedding),
+        );
       const missingTransient = [...selectedTransientIds]
         .map((id) => transientById.get(id))
-        .filter((question): question is DuplicateReference => Boolean(question && !question.semanticEmbedding));
+        .filter((question): question is DuplicateReference =>
+          Boolean(question && !question.semanticEmbedding),
+        );
 
-      const [existingEmbeddingResult, historicalEmbeddingResult, transientEmbeddingResult] =
-        await Promise.all([
-          missingExisting.length > 0
-            ? this.provider.embedTexts(missingExisting.map((question) => question.text))
-            : Promise.resolve(null),
-          missingHistorical.length > 0
-            ? this.provider.embedTexts(missingHistorical.map((question) => question.text))
-            : Promise.resolve(null),
-          missingTransient.length > 0
-            ? this.provider.embedTexts(missingTransient.map((question) => question.text))
-            : Promise.resolve(null),
-        ]);
+      const [
+        existingEmbeddingResult,
+        historicalEmbeddingResult,
+        transientEmbeddingResult,
+      ] = await Promise.all([
+        missingExisting.length > 0
+          ? this.provider.embedTexts(
+              missingExisting.map((question) => question.text),
+            )
+          : Promise.resolve(null),
+        missingHistorical.length > 0
+          ? this.provider.embedTexts(
+              missingHistorical.map((question) => question.text),
+            )
+          : Promise.resolve(null),
+        missingTransient.length > 0
+          ? this.provider.embedTexts(
+              missingTransient.map((question) => question.text),
+            )
+          : Promise.resolve(null),
+      ]);
 
       if (existingEmbeddingResult) {
         addEmbeddingMetrics(metrics, existingEmbeddingResult);
         missingExisting.forEach((question, index) => {
-          question.semanticEmbedding = existingEmbeddingResult.embeddings[index] ?? [];
+          question.semanticEmbedding =
+            existingEmbeddingResult.embeddings[index] ?? [];
         });
         await this.questionRepository.updateSemanticArtifacts(
           missingExisting.map((question) => ({
@@ -319,7 +382,8 @@ export class DuplicateDetectionService {
       if (historicalEmbeddingResult) {
         addEmbeddingMetrics(metrics, historicalEmbeddingResult);
         missingHistorical.forEach((question, index) => {
-          question.semanticEmbedding = historicalEmbeddingResult.embeddings[index] ?? [];
+          question.semanticEmbedding =
+            historicalEmbeddingResult.embeddings[index] ?? [];
         });
         await this.historicalRepository.updateSemanticArtifacts(
           missingHistorical.map((question) => ({
@@ -333,11 +397,15 @@ export class DuplicateDetectionService {
       if (transientEmbeddingResult) {
         addEmbeddingMetrics(metrics, transientEmbeddingResult);
         missingTransient.forEach((question, index) => {
-          question.semanticEmbedding = transientEmbeddingResult.embeddings[index] ?? [];
+          question.semanticEmbedding =
+            transientEmbeddingResult.embeddings[index] ?? [];
         });
       }
     } catch (error) {
-      logger.warn({ err: error }, "Semantic duplicate detection failed; falling back to deterministic checks.");
+      logger.warn(
+        { err: error },
+        "Semantic duplicate detection failed; falling back to deterministic checks.",
+      );
       return {
         acceptedQuestions: lexicallyAccepted,
         conflicts,
@@ -366,7 +434,10 @@ export class DuplicateDetectionService {
 
       semanticallyAccepted.push(question);
       resolvedTransientReferences.push(
-        this.toReference(question, `semantic-accepted-${resolvedTransientReferences.length + 1}`),
+        this.toReference(
+          question,
+          `semantic-accepted-${resolvedTransientReferences.length + 1}`,
+        ),
       );
     }
 
@@ -389,7 +460,10 @@ export class DuplicateDetectionService {
     });
 
     if (assessment.conflicts.length > 0) {
-      throw new Error(assessment.conflicts[0]?.message ?? "Generated question conflicts with existing data.");
+      throw new Error(
+        assessment.conflicts[0]?.message ??
+          "Generated question conflicts with existing data.",
+      );
     }
   }
 
@@ -417,68 +491,33 @@ export class DuplicateDetectionService {
     excludeQuestionId?: string,
   ): DeterministicConflict | null {
     for (const acceptedQuestion of acceptedReferences) {
-      const exactConflict = this.matchExact(question, acceptedQuestion, "accepted_attempt");
-      if (exactConflict) return exactConflict;
-
-      const structuralConflict = this.matchStructural(
-        question,
-        acceptedQuestion,
-        "accepted_attempt_structural",
-        "Generated question repeats the same underlying pattern as another accepted question from this generation run.",
-      );
-      if (structuralConflict) return structuralConflict;
-
-      const lexicalConflict = this.matchLexical(
+      const exactConflict = this.matchExact(
         question,
         acceptedQuestion,
         "accepted_attempt",
-        "Generated question is too similar to another accepted question from this generation run.",
       );
-      if (lexicalConflict) return lexicalConflict;
+      if (exactConflict) return exactConflict;
     }
 
     for (const existingQuestion of context.existingQuestions) {
-      if (excludeQuestionId && existingQuestion.id === excludeQuestionId) continue;
+      if (excludeQuestionId && existingQuestion.id === excludeQuestionId)
+        continue;
 
-      const exactConflict = this.matchExact(question, existingQuestion, "existing_question_bank");
-      if (exactConflict) return exactConflict;
-
-      const structuralConflict = this.matchStructural(
-        question,
-        existingQuestion,
-        "existing_question_bank_structural",
-        "Generated question repeats the same stored problem pattern with only superficial changes.",
-      );
-      if (structuralConflict) return structuralConflict;
-
-      const lexicalConflict = this.matchLexical(
+      const exactConflict = this.matchExact(
         question,
         existingQuestion,
         "existing_question_bank",
-        "Generated question is too similar to a stored question.",
       );
-      if (lexicalConflict) return lexicalConflict;
+      if (exactConflict) return exactConflict;
     }
 
     for (const historicalQuestion of context.historicalQuestions) {
-      const exactConflict = this.matchExact(question, historicalQuestion, "historical_paper");
-      if (exactConflict) return exactConflict;
-
-      const structuralConflict = this.matchStructural(
-        question,
-        historicalQuestion,
-        "historical_paper_structural",
-        "Generated question repeats the same historical paper pattern with only superficial changes.",
-      );
-      if (structuralConflict) return structuralConflict;
-
-      const lexicalConflict = this.matchLexical(
+      const exactConflict = this.matchExact(
         question,
         historicalQuestion,
         "historical_paper",
-        "Generated question is too similar to a historical paper question.",
       );
-      if (lexicalConflict) return lexicalConflict;
+      if (exactConflict) return exactConflict;
     }
 
     return null;
@@ -504,45 +543,6 @@ export class DuplicateDetectionService {
     };
   }
 
-  private matchLexical(
-    question: ValidatedQuestionPayload,
-    reference: DuplicateReference,
-    source: DuplicateConflict["source"],
-    message: string,
-  ): DeterministicConflict | null {
-    if (jaccardSimilarity(reference.text, question.text) < DIRECT_LEXICAL_THRESHOLD) {
-      return null;
-    }
-
-    return {
-      question,
-      source,
-      classification: "lexical",
-      message,
-    };
-  }
-
-  private matchStructural(
-    question: ValidatedQuestionPayload,
-    reference: DuplicateReference,
-    source: DuplicateConflict["source"],
-    message: string,
-  ): DeterministicConflict | null {
-    if (
-      reference.structuralFingerprint !== question.structuralFingerprint &&
-      structuralSimilarity(reference.text, question.text) < STRUCTURAL_DIRECT_THRESHOLD
-    ) {
-      return null;
-    }
-
-    return {
-      question,
-      source,
-      classification: "structural",
-      message,
-    };
-  }
-
   private findSemanticConflict(
     question: ValidatedQuestionPayload,
     context: DuplicateContext,
@@ -558,7 +558,14 @@ export class DuplicateDetectionService {
 
       const embedding = transientQuestion.semanticEmbedding ?? [];
 
-      if (this.isSemanticDuplicate(question.text, transientQuestion.text, question.semanticEmbedding ?? [], embedding)) {
+      if (
+        this.isSemanticDuplicate(
+          question.text,
+          transientQuestion.text,
+          question.semanticEmbedding ?? [],
+          embedding,
+        )
+      ) {
         return {
           question,
           source: "accepted_attempt_semantic",
@@ -575,11 +582,19 @@ export class DuplicateDetectionService {
       }
 
       const embedding = existingQuestion.semanticEmbedding ?? [];
-      if (this.isSemanticDuplicate(question.text, existingQuestion.text, question.semanticEmbedding ?? [], embedding)) {
+      if (
+        this.isSemanticDuplicate(
+          question.text,
+          existingQuestion.text,
+          question.semanticEmbedding ?? [],
+          embedding,
+        )
+      ) {
         return {
           question,
           source: "existing_question_bank_semantic",
-          message: "Generated question is semantically too similar to an existing question.",
+          message:
+            "Generated question is semantically too similar to an existing question.",
         };
       }
     }
@@ -590,11 +605,19 @@ export class DuplicateDetectionService {
       }
 
       const embedding = historicalQuestion.semanticEmbedding ?? [];
-      if (this.isSemanticDuplicate(question.text, historicalQuestion.text, question.semanticEmbedding ?? [], embedding)) {
+      if (
+        this.isSemanticDuplicate(
+          question.text,
+          historicalQuestion.text,
+          question.semanticEmbedding ?? [],
+          embedding,
+        )
+      ) {
         return {
           question,
           source: "historical_paper_semantic",
-          message: "Generated question is semantically too similar to a historical paper question.",
+          message:
+            "Generated question is semantically too similar to a historical paper question.",
         };
       }
     }
@@ -602,7 +625,10 @@ export class DuplicateDetectionService {
     return null;
   }
 
-  private toReference(question: ValidatedQuestionPayload, id: string): TransientQuestionReference {
+  private toReference(
+    question: ValidatedQuestionPayload,
+    id: string,
+  ): TransientQuestionReference {
     return {
       id,
       text: question.text,
@@ -621,8 +647,10 @@ export class DuplicateDetectionService {
     }
 
     return (
-      structuralSimilarity(question.text, reference.text) >= SEMANTIC_PREFILTER_THRESHOLD ||
-      jaccardSimilarity(question.text, reference.text) >= SEMANTIC_PREFILTER_THRESHOLD
+      structuralSimilarity(question.text, reference.text) >=
+        SEMANTIC_PREFILTER_THRESHOLD ||
+      jaccardSimilarity(question.text, reference.text) >=
+        SEMANTIC_PREFILTER_THRESHOLD
     );
   }
 
@@ -638,10 +666,16 @@ export class DuplicateDetectionService {
 
     const lexicalSimilarity = jaccardSimilarity(leftText, rightText);
     const structuralScore = structuralSimilarity(leftText, rightText);
-    if (lexicalSimilarity < SEMANTIC_LEXICAL_GATE && structuralScore < SEMANTIC_LEXICAL_GATE) {
+    if (
+      lexicalSimilarity < SEMANTIC_LEXICAL_GATE &&
+      structuralScore < SEMANTIC_LEXICAL_GATE
+    ) {
       return false;
     }
 
-    return cosineSimilarity(leftEmbedding, rightEmbedding) >= env.SEMANTIC_SIMILARITY_THRESHOLD;
+    return (
+      cosineSimilarity(leftEmbedding, rightEmbedding) >=
+      env.SEMANTIC_SIMILARITY_THRESHOLD
+    );
   }
 }

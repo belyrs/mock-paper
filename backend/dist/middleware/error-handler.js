@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.errorHandler = errorHandler;
 const app_error_1 = require("../errors/app-error");
+const public_error_1 = require("../errors/public-error");
 const logger_1 = require("../config/logger");
 function errorHandler(error, request, response, _next) {
     if (error instanceof app_error_1.AppError) {
@@ -18,11 +19,7 @@ function errorHandler(error, request, response, _next) {
             logger_1.logger.warn(payload, "Request failed with application error.");
         }
         return response.status(error.statusCode).json({
-            error: {
-                code: error.code,
-                message: error.message,
-                details: error.details ?? null,
-            },
+            error: (0, public_error_1.toPublicError)(error),
         });
     }
     logger_1.logger.error({ err: error, path: request.path }, "Unhandled request error");

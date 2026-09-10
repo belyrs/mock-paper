@@ -71,7 +71,7 @@ function createApp(dataSource) {
     const syllabusGroundingService = new syllabus_grounding_service_1.SyllabusGroundingService();
     const questionGenerationService = new question_generation_service_1.QuestionGenerationService(questionGenerationProvider, duplicateDetectionService, historicalAnalysisService, syllabusGroundingService);
     const historicalPaperService = new historical_paper_service_1.HistoricalPaperService(historicalRepository);
-    const paperService = new paper_service_1.PaperService(paperRepository, questionRepository, userRepository, questionGenerationService, generationRunRepository);
+    const paperService = new paper_service_1.PaperService(paperRepository, questionRepository, userRepository, questionGenerationService, generationRunRepository, dataSource);
     const authController = new auth_controller_1.AuthController(authService, passwordResetService);
     const paperController = new paper_controller_1.PaperController(paperService);
     const historicalPaperController = new historical_paper_controller_1.HistoricalPaperController(historicalPaperService);

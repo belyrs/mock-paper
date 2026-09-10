@@ -39,7 +39,6 @@ const QUESTION_SCHEMA = {
         examRelevance: EXAM_RELEVANCE_SCHEMA,
         sourceReference: { type: ["string", "null"] },
         solutionOutline: { type: "string", minLength: 8 },
-        difficultyRationale: { type: "string", minLength: 8 },
     },
     required: [
         "questionNumber",
@@ -55,7 +54,6 @@ const QUESTION_SCHEMA = {
         "examRelevance",
         "sourceReference",
         "solutionOutline",
-        "difficultyRationale",
     ],
 };
 const GENERATION_RESPONSE_FORMAT = {
@@ -67,18 +65,9 @@ const GENERATION_RESPONSE_FORMAT = {
             type: "object",
             additionalProperties: false,
             properties: {
-                historicalAnalysisMode: {
-                    type: "string",
-                    enum: ["imported_dataset", "model_knowledge_fallback", "mixed"],
-                },
-                historicalAnalysisSummary: { type: "string" },
                 questions: { type: "array", items: QUESTION_SCHEMA },
             },
-            required: [
-                "historicalAnalysisMode",
-                "historicalAnalysisSummary",
-                "questions",
-            ],
+            required: ["questions"],
         },
     },
 };
@@ -132,6 +121,30 @@ function modelControls(model, reasoningEffort, temperature) {
     return model.startsWith("gpt-5")
         ? { reasoning_effort: reasoningEffort, verbosity: "low" }
         : { temperature };
+}
+async function fetchOpenAi(path, init, operation) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), env_1.env.OPENAI_REQUEST_TIMEOUT_MS);
+    try {
+        return await fetch(`${env_1.env.OPENAI_BASE_URL}${path}`, {
+            ...init,
+            signal: controller.signal,
+        });
+    }
+    catch (error) {
+        const timedOut = controller.signal.aborted;
+        throw new app_error_1.AppError(502, timedOut ? "OPENAI_REQUEST_TIMEOUT" : "OPENAI_NETWORK_ERROR", timedOut
+            ? `The OpenAI ${operation} request exceeded the configured timeout.`
+            : `The OpenAI ${operation} request could not be reached.`, {
+            status: 0,
+            operation,
+            timeoutMs: env_1.env.OPENAI_REQUEST_TIMEOUT_MS,
+            reason: error instanceof Error ? error.message : "Unknown network error",
+        });
+    }
+    finally {
+        clearTimeout(timeout);
+    }
 }
 class OpenAiQuestionGenerationProvider {
     async generate(request) {
@@ -236,7 +249,7 @@ class OpenAiQuestionGenerationProvider {
             batchNumber,
             batchCount,
         }, "Dispatching focused OpenAI generation batch.");
-        const response = await fetch(`${env_1.env.OPENAI_BASE_URL}/chat/completions`, {
+        const response = await fetchOpenAi("/chat/completions", {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${env_1.env.OPENAI_API_KEY}`,
@@ -257,7 +270,7 @@ class OpenAiQuestionGenerationProvider {
                     },
                 ],
             }),
-        });
+        }, "generation");
         if (!response.ok) {
             const body = await response.text();
             throw new app_error_1.AppError(502, "OPENAI_REQUEST_FAILED", "The OpenAI generation request failed.", { status: response.status, body });
@@ -428,7 +441,7 @@ class OpenAiQuestionGenerationProvider {
             batchNumber,
             batchCount,
         }, "Dispatching focused academic review batch.");
-        const response = await fetch(`${env_1.env.OPENAI_BASE_URL}/chat/completions`, {
+        const response = await fetchOpenAi("/chat/completions", {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${env_1.env.OPENAI_API_KEY}`,
@@ -446,7 +459,7 @@ class OpenAiQuestionGenerationProvider {
                     { role: "user", content: prompt },
                 ],
             }),
-        });
+        }, "review");
         if (!response.ok) {
             const body = await response.text();
             throw new app_error_1.AppError(502, "OPENAI_REVIEW_FAILED", "The OpenAI academic quality review request failed.", { status: response.status, body });
@@ -551,7 +564,7 @@ class OpenAiQuestionGenerationProvider {
             throw new app_error_1.AppError(503, "OPENAI_NOT_CONFIGURED", "OPENAI_API_KEY is required to compute semantic similarity.");
         }
         const startedAt = Date.now();
-        const response = await fetch(`${env_1.env.OPENAI_BASE_URL}/embeddings`, {
+        const response = await fetchOpenAi("/embeddings", {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${env_1.env.OPENAI_API_KEY}`,
@@ -561,7 +574,7 @@ class OpenAiQuestionGenerationProvider {
                 model: env_1.env.OPENAI_EMBEDDING_MODEL,
                 input: texts,
             }),
-        });
+        }, "embedding");
         if (!response.ok) {
             const body = await response.text();
             throw new app_error_1.AppError(502, "OPENAI_EMBEDDING_FAILED", "The OpenAI embedding request failed.", { status: response.status, body });

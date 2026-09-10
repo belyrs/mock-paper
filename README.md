@@ -94,7 +94,7 @@ The backend uses a provider abstraction in `backend/src/services/generation/type
 
 ### Prompt behavior
 
-The educational prompt you supplied is preserved as the core instruction set and is dynamically filled with:
+The demo path uses a compact version of the supplied educational instruction set and dynamically fills it with:
 
 - subject
 - class level
@@ -103,8 +103,12 @@ The educational prompt you supplied is preserved as the core instruction set and
 - target exams
 - question count
 - difficulty mix
-- prior generated questions
-- historical analysis summary
+- up to eight recent exact-question exclusions
+- a historical summary only when imported data exists
+
+For normal papers of up to 20 questions, each subject is generated in one
+structured OpenAI request. A second request is made only to repair missing or
+invalid slots.
 
 ### Historical analysis modes
 
@@ -125,12 +129,14 @@ Before saving any generated question, the backend checks:
 - required fields
 - four-option MCQ shape
 - valid correct option
-- requested question count
-- requested difficulty distribution
+- per-question schema and syllabus relevance
+- deterministic difficulty-slot selection
 - normalized text hash collisions
-- lexical near-duplicates against previous generated questions
-- overlap with historical imported questions
-- optional semantic similarity via embeddings when enabled
+- exact duplicates within the paper and a bounded recent same-syllabus history
+
+Semantic and structural similarity checks remain available for future strict
+production mode, but are disabled in the default demo path because they add
+latency and can reject otherwise usable papers.
 
 Questions are always stored in PostgreSQL. They are never kept only in frontend state.
 
@@ -143,6 +149,11 @@ Both `.env` and `.env.example` are included at the project root.
 - `QUESTION_PROVIDER=openai`
   - This is the intended production path and uses the full educational prompt plus syllabus grounding.
   - If `OPENAI_API_KEY` is missing or the OpenAI request fails, the backend can fall back to a deterministic syllabus-grounded generator for supported topics instead of returning fake placeholder text.
+- `DEMO_FAST_GENERATION=true`
+  - Uses one generation call per subject for papers up to 20 questions.
+  - Limits generation to one primary attempt and one targeted repair attempt.
+  - Disables synchronous LLM review and semantic embeddings.
+  - Reuses previously saved questions from the exact syllabus slice only when generation and repair cannot fill the paper.
 - `MAIL_PROVIDER=console`
   - This keeps password reset working locally without requiring a real mail service.
 - `DATABASE_SSL=false`
@@ -157,8 +168,12 @@ To use real AI generation, set:
 QUESTION_PROVIDER=openai
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-5.2
-OPENAI_REVIEW_MODEL=gpt-5.2
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+OPENAI_REQUEST_TIMEOUT_MS=60000
+OPENAI_GENERATION_BATCH_SIZE=20
+DEMO_FAST_GENERATION=true
+QUESTION_GENERATION_MAX_ATTEMPTS=2
+ACADEMIC_REVIEW_ENABLED=false
+SEMANTIC_DEDUP_ENABLED=false
 ```
 
 The specific API key variable used by the backend is:
@@ -492,6 +507,7 @@ Common codes include:
 - `QUESTION_GENERATION_FAILED`
 - `OPENAI_NOT_CONFIGURED`
 - `OPENAI_REQUEST_FAILED`
+- `OPENAI_REQUEST_TIMEOUT`
 - `DUPLICATE_QUESTION`
 - `PAPER_NOT_FOUND`
 

@@ -37,7 +37,9 @@ export class QuestionRepository {
     );
   }
 
-  async updateSemanticArtifacts(payload: Array<{ id: string; semanticEmbedding?: number[] | null }>) {
+  async updateSemanticArtifacts(
+    payload: Array<{ id: string; semanticEmbedding?: number[] | null }>,
+  ) {
     await Promise.all(
       payload.map((item) =>
         this.repository.update(item.id, {
@@ -60,26 +62,24 @@ export class QuestionRepository {
     chapterNormalized: string;
     subTopicNormalized: string;
     excludePaperId?: string;
+    limit?: number;
   }) {
     return this.repository
       .find({
-        where: [
-          {
-            subject: payload.subject,
-            classLevel: payload.classLevel,
-            chapterNormalized: payload.chapterNormalized,
-          },
-          {
-            subject: payload.subject,
-            classLevel: payload.classLevel,
-            subTopicNormalized: payload.subTopicNormalized,
-          },
-        ],
-        relations: { paper: true },
+        where: {
+          subject: payload.subject,
+          classLevel: payload.classLevel,
+          chapterNormalized: payload.chapterNormalized,
+          subTopicNormalized: payload.subTopicNormalized,
+        },
+        order: { createdAt: "DESC" },
+        take: payload.limit ?? 40,
       })
       .then((questions) =>
         payload.excludePaperId
-          ? questions.filter((question) => question.paperId !== payload.excludePaperId)
+          ? questions.filter(
+              (question) => question.paperId !== payload.excludePaperId,
+            )
           : questions,
       );
   }

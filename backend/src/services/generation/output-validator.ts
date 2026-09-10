@@ -13,6 +13,7 @@ import type {
   GenerationProviderRequest,
   ValidatedQuestionPayload,
 } from "./types";
+import { containsInternalTechnologyReference } from "../../utils/public-content";
 
 const bannedPlaceholderPatterns = [
   /\bscenario tagged\b/i,
@@ -263,13 +264,11 @@ function hasEnoughTopicGrounding(
   question: GeneratedQuestionCandidate,
   request: GenerationProviderRequest,
 ) {
-  if (!request.syllabusContext.canonicalMatch) {
-    return true;
-  }
-
   const keywordPool = request.syllabusContext.validationKeywords
     .map((keyword) => normalizeText(keyword))
     .filter((keyword) => keyword.length >= 4);
+  if (keywordPool.length === 0) return true;
+
   const combined = normalizeText(
     [
       question.questionText,
@@ -289,10 +288,6 @@ function conceptAlignsWithGrounding(
   question: GeneratedQuestionCandidate,
   request: GenerationProviderRequest,
 ) {
-  if (!request.syllabusContext.canonicalMatch) {
-    return true;
-  }
-
   const concept = normalizeText(question.conceptTested);
   const matchesGroundedConcept = request.syllabusContext.coreConcepts.some(
     (allowedConcept) => {
@@ -309,9 +304,18 @@ function conceptAlignsWithGrounding(
     return true;
   }
 
-  return request.syllabusContext.validationKeywords.some((keyword) =>
-    concept.includes(normalizeText(keyword)),
+  const questionContext = normalizeText(
+    `${question.questionText} ${question.options.join(" ")} ${concept}`,
   );
+
+  return request.syllabusContext.validationKeywords.some((keyword) => {
+    const normalizedKeyword = normalizeText(keyword);
+    return (
+      normalizedKeyword.length >= 4 &&
+      (concept.includes(normalizedKeyword) ||
+        questionContext.includes(normalizedKeyword))
+    );
+  });
 }
 
 function keywordOverlap(left: string, right: string) {
@@ -403,6 +407,10 @@ export function validateProviderOutput(
       sanitizedQuestion.commonMistake,
       sanitizedQuestion.recommendedRemedialAction,
       sanitizedQuestion.learningOutcome,
+      sanitizedQuestion.bloomsTaxonomyLevel,
+      sanitizedQuestion.sourceReference ?? "",
+      sanitizedQuestion.solutionOutline ?? "",
+      sanitizedQuestion.difficultyRationale ?? "",
     ];
 
     if (hasPlaceholderLeakage(userFacingTexts)) {
@@ -410,6 +418,20 @@ export function validateProviderOutput(
         502,
         "ACADEMIC_VALIDATION_FAILED",
         "The generated output leaked placeholder or synthetic internal metadata into user-facing question content.",
+        {
+          questionNumber: question.questionNumber,
+          subject: request.subject,
+          chapter: request.chapter,
+          subTopic: request.subTopic,
+        },
+      );
+    }
+
+    if (userFacingTexts.some(containsInternalTechnologyReference)) {
+      throw new AppError(
+        502,
+        "ACADEMIC_VALIDATION_FAILED",
+        "The generated output contains internal preparation terminology.",
         {
           questionNumber: question.questionNumber,
           subject: request.subject,
@@ -516,4 +538,89 @@ export function validateProviderOutput(
       },
     };
   });
+}
+
+export interface CandidateValidationRejection {
+  candidateIndex: number;
+  questionText: string | null;
+  code: string;
+  message: string;
+}
+
+export interface CandidateValidationResult {
+  acceptedQuestions: ValidatedQuestionPayload[];
+  rejectedQuestions: CandidateValidationRejection[];
+}
+
+function candidateText(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const text =
+    record.questionText ?? record.text ?? record.stem ?? record.question;
+  return typeof text === "string" ? sanitizeText(text).slice(0, 500) : null;
+}
+
+export function validateProviderCandidates(
+  request: GenerationProviderRequest,
+  result: GenerationProviderResult,
+): CandidateValidationResult {
+  const acceptedQuestions: ValidatedQuestionPayload[] = [];
+  const rejectedQuestions: CandidateValidationRejection[] = [];
+
+  result.questions.forEach((question, index) => {
+    const planSlot = request.generationPlan[index];
+    const expectedDifficulty = planSlot?.difficulty ?? "Medium";
+    const difficultyCounts = {
+      Easy: expectedDifficulty === "Easy" ? 1 : 0,
+      Medium: expectedDifficulty === "Medium" ? 1 : 0,
+      Hard: expectedDifficulty === "Hard" ? 1 : 0,
+    };
+
+    try {
+      const [validated] = validateProviderOutput(
+        {
+          ...request,
+          questionCount: 1,
+          difficultyCounts,
+          selectionDifficultyCounts: undefined,
+          generationPlan: planSlot ? [{ ...planSlot, slotNumber: 1 }] : [],
+        },
+        {
+          ...result,
+          questions: [question],
+        },
+      );
+
+      if (validated) acceptedQuestions.push(validated);
+    } catch (error) {
+      rejectedQuestions.push({
+        candidateIndex: index + 1,
+        questionText: candidateText(question),
+        code:
+          error instanceof AppError ? error.code : "INVALID_GENERATION_OUTPUT",
+        message:
+          error instanceof Error
+            ? error.message
+            : "The generated candidate could not be validated.",
+      });
+    }
+  });
+
+  if (result.questions.length < request.questionCount) {
+    for (
+      let index = result.questions.length;
+      index < request.questionCount;
+      index += 1
+    ) {
+      rejectedQuestions.push({
+        candidateIndex: index + 1,
+        questionText: null,
+        code: "MISSING_GENERATED_QUESTION",
+        message:
+          "The generation provider omitted this requested question slot.",
+      });
+    }
+  }
+
+  return { acceptedQuestions, rejectedQuestions };
 }

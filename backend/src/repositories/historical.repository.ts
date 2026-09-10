@@ -46,7 +46,9 @@ export class HistoricalRepository {
     );
   }
 
-  async updateSemanticArtifacts(payload: Array<{ id: string; semanticEmbedding?: number[] | null }>) {
+  async updateSemanticArtifacts(
+    payload: Array<{ id: string; semanticEmbedding?: number[] | null }>,
+  ) {
     await Promise.all(
       payload.map((item) =>
         this.questionRepository.update(item.id, {
@@ -66,21 +68,17 @@ export class HistoricalRepository {
     subTopicNormalized: string;
   }) {
     return this.questionRepository.find({
-      where: [
-        {
-          subject: payload.subject,
-          chapterNormalized: payload.chapterNormalized,
-        },
-        {
-          subject: payload.subject,
-          subTopicNormalized: payload.subTopicNormalized,
-        },
-      ],
+      where: {
+        subject: payload.subject,
+        chapterNormalized: payload.chapterNormalized,
+        subTopicNormalized: payload.subTopicNormalized,
+      },
       relations: { paper: true },
       order: {
         paper: { year: "DESC" },
         questionNumber: "ASC",
       },
+      take: 40,
     });
   }
 }

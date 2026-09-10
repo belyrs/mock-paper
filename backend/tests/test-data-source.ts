@@ -28,6 +28,7 @@ export async function createTestDataSource(): Promise<DataSource> {
     schema.registerFunction({
       name: "gen_random_uuid",
       returns: DataType.uuid,
+      impure: true,
       implementation: () => crypto.randomUUID(),
     });
   });
@@ -35,12 +36,21 @@ export async function createTestDataSource(): Promise<DataSource> {
   database.public.registerFunction({
     name: "uuid_generate_v4",
     returns: DataType.uuid,
+    impure: true,
     implementation: () => crypto.randomUUID(),
   });
 
   const dataSource = await database.adapters.createTypeormDataSource({
     type: "postgres",
-    entities: [User, PasswordResetToken, Paper, Question, GenerationRun, HistoricalPaper, HistoricalQuestion],
+    entities: [
+      User,
+      PasswordResetToken,
+      Paper,
+      Question,
+      GenerationRun,
+      HistoricalPaper,
+      HistoricalQuestion,
+    ],
     synchronize: true,
   });
 

@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.QuestionGenerationService = void 0;
-exports.addRetryCandidateReserve = addRetryCandidateReserve;
 exports.shouldAcceptAcademicReview = shouldAcceptAcademicReview;
 const app_error_1 = require("../errors/app-error");
 const logger_1 = require("../config/logger");
@@ -11,20 +10,7 @@ const env_1 = require("../config/env");
 const difficulty_1 = require("../utils/difficulty");
 const normalization_1 = require("../utils/normalization");
 const plan_builder_1 = require("./generation/plan-builder");
-const MAX_PROMPT_QUESTION_CONTEXT = 36;
-function addRetryCandidateReserve(remainingCounts, attempt) {
-    if (attempt === 1) {
-        return { ...remainingCounts };
-    }
-    return Object.fromEntries(["Easy", "Medium", "Hard"].map((difficulty) => {
-        const remaining = remainingCounts[difficulty];
-        if (remaining === 0) {
-            return [difficulty, 0];
-        }
-        const reserve = Math.min(3, Math.max(1, Math.ceil(remaining * 0.4)));
-        return [difficulty, remaining + reserve];
-    }));
-}
+const MAX_PROMPT_QUESTION_CONTEXT = 10;
 function selectRequiredDifficultyMix(candidates, remainingCounts) {
     const availableSlots = { ...remainingCounts };
     return candidates.filter((question) => {
@@ -34,6 +20,36 @@ function selectRequiredDifficultyMix(candidates, remainingCounts) {
         availableSlots[question.difficulty] -= 1;
         return true;
     });
+}
+function toReusableQuestionPayload(question) {
+    return {
+        subject: question.subject,
+        classLevel: question.classLevel,
+        chapter: question.chapter,
+        subTopic: question.subTopic,
+        targetExams: question.targetExams,
+        difficulty: question.difficulty,
+        text: question.text,
+        options: question.options,
+        correctOption: question.correctOption,
+        correctIndex: question.correctIndex,
+        conceptTested: question.conceptTested,
+        commonMistake: question.commonMistake,
+        recommendedRemedialAction: question.recommendedRemedialAction,
+        learningOutcome: question.learningOutcome,
+        bloomsTaxonomyLevel: question.bloomsTaxonomyLevel,
+        examRelevance: question.examRelevance,
+        sourceReference: question.sourceReference,
+        normalizedText: question.normalizedText,
+        normalizedHash: question.normalizedHash,
+        structuralFingerprint: question.structuralFingerprint,
+        semanticEmbedding: null,
+        metadata: {
+            ...(question.metadata ?? {}),
+            reusedFromQuestionId: question.id,
+            fallbackReason: "generation_or_repair_exhausted",
+        },
+    };
 }
 function shouldAcceptAcademicReview(question, review) {
     if (!review)
@@ -155,7 +171,7 @@ class QuestionGenerationService {
             embeddingTotalTokens: 0,
         };
         const buildPreviousQuestions = (attempt = 1) => {
-            const compact = (text) => text.replace(/\s+/g, " ").trim().slice(0, 220);
+            const compact = (text) => text.replace(/\s+/g, " ").trim().slice(0, 160);
             const bankReferences = [
                 ...duplicateContext.existingQuestions,
                 ...duplicateContext.historicalQuestions,
@@ -209,15 +225,8 @@ class QuestionGenerationService {
                 if (remainingQuestionCount === 0) {
                     break;
                 }
-                const isRepairAttempt = rejectedQuestionTexts.length > 0;
-                const shouldUseInitialCandidatePool = attempt === 1 &&
-                    Boolean(this.provider.reviewQuestions) &&
-                    duplicateContext.existingQuestions.length +
-                        duplicateContext.historicalQuestions.length >=
-                        input.subjectConfiguration.numberOfQuestions * 2;
-                const candidateDifficultyCounts = addRetryCandidateReserve(remainingDifficultyCounts, isRepairAttempt || shouldUseInitialCandidatePool
-                    ? Math.max(2, attempt)
-                    : 1);
+                const isRepairAttempt = attempt > 1;
+                const candidateDifficultyCounts = { ...remainingDifficultyCounts };
                 const candidateQuestionCount = (0, difficulty_1.totalDifficultyCount)(candidateDifficultyCounts);
                 const attemptRequest = {
                     ...request,
@@ -257,7 +266,6 @@ class QuestionGenerationService {
                     remainingDifficultyCounts,
                     candidateDifficultyCounts,
                     isRepairAttempt,
-                    shouldUseInitialCandidatePool,
                     promptExclusionCount: attemptRequest.previousQuestions.length,
                     generationPlanSlots: attemptRequest.generationPlan.length,
                 }, "Question generation attempt started.");
@@ -287,12 +295,18 @@ class QuestionGenerationService {
                     providerResult.metrics?.promptCharacters ?? 0;
                 aggregateMetrics.responseCharacters +=
                     providerResult.metrics?.responseCharacters ?? 0;
-                const validatedQuestions = (0, output_validator_1.validateProviderOutput)(attemptRequest, providerResult);
+                const candidateValidation = (0, output_validator_1.validateProviderCandidates)(attemptRequest, providerResult);
+                const validatedQuestions = candidateValidation.acceptedQuestions;
+                if (candidateValidation.rejectedQuestions.length > 0) {
+                    rejectedQuestionTexts.push(...candidateValidation.rejectedQuestions.flatMap((rejection) => rejection.questionText ? [rejection.questionText] : []));
+                    rejectionReasons.push(...candidateValidation.rejectedQuestions.map((rejection) => `${rejection.code}: ${rejection.message}`));
+                }
                 logger_1.logger.info({
                     subject: request.subject,
                     attempt,
                     validatedQuestionCount: validatedQuestions.length,
-                }, "Generated questions passed schema validation.");
+                    rejectedQuestionCount: candidateValidation.rejectedQuestions.length,
+                }, "Generated candidates were validated independently.");
                 const duplicateAssessment = await this.duplicateDetectionService.assessQuestions(validatedQuestions, duplicateContext, {
                     excludeQuestionId: input.excludeQuestionId,
                     transientQuestions: [
@@ -322,7 +336,8 @@ class QuestionGenerationService {
                     duplicateAssessment.metrics.semanticConflictCount;
                 let academicallyAcceptedQuestions = duplicateAssessment.acceptedQuestions;
                 let academicReviewResult = null;
-                if (this.provider.reviewQuestions &&
+                if (env_1.env.ACADEMIC_REVIEW_ENABLED &&
+                    this.provider.reviewQuestions &&
                     duplicateAssessment.acceptedQuestions.length > 0) {
                     academicReviewResult = await this.provider.reviewQuestions(attemptRequest, duplicateAssessment.acceptedQuestions);
                     aggregateMetrics.academicReviewCallCount +=
@@ -490,6 +505,88 @@ class QuestionGenerationService {
                     maxAttempts: env_1.env.QUESTION_GENERATION_MAX_ATTEMPTS,
                     err: error,
                 }, "Question generation attempt failed.");
+            }
+        }
+        const remainingBeforeFallback = input.subjectConfiguration.numberOfQuestions - acceptedQuestions.length;
+        if (remainingBeforeFallback > 0) {
+            const reusableQuestions = await this.duplicateDetectionService.findReusableQuestions({
+                subject: input.subjectConfiguration.subject,
+                classLevel: input.classLevel,
+                chapter: input.subjectConfiguration.chapter,
+                subTopic: input.subjectConfiguration.subTopic,
+                excludePaperId: input.excludePaperId,
+                limit: 60,
+            });
+            const seenHashes = new Set(acceptedQuestions.map((question) => question.normalizedHash));
+            const remainingCounts = (0, difficulty_1.subtractDifficultyCounts)(targetDifficultyCounts, (0, difficulty_1.countByDifficulty)(acceptedQuestions));
+            const unused = reusableQuestions.filter((question) => !seenHashes.has(question.normalizedHash));
+            const selectedReusable = [];
+            for (const difficulty of ["Easy", "Medium", "Hard"]) {
+                for (const question of unused) {
+                    if (remainingCounts[difficulty] <= 0)
+                        break;
+                    if (question.difficulty !== difficulty ||
+                        seenHashes.has(question.normalizedHash)) {
+                        continue;
+                    }
+                    selectedReusable.push(toReusableQuestionPayload(question));
+                    seenHashes.add(question.normalizedHash);
+                    remainingCounts[difficulty] -= 1;
+                }
+            }
+            for (const question of unused) {
+                if (acceptedQuestions.length + selectedReusable.length >=
+                    input.subjectConfiguration.numberOfQuestions) {
+                    break;
+                }
+                if (seenHashes.has(question.normalizedHash))
+                    continue;
+                selectedReusable.push(toReusableQuestionPayload(question));
+                seenHashes.add(question.normalizedHash);
+            }
+            acceptedQuestions.push(...selectedReusable);
+            if (acceptedQuestions.length ===
+                input.subjectConfiguration.numberOfQuestions) {
+                logger_1.logger.warn({
+                    subject: request.subject,
+                    reusedQuestionCount: selectedReusable.length,
+                    generatedQuestionCount: acceptedQuestions.length - selectedReusable.length,
+                }, "Generation attempts were incomplete; filled the remaining paper slots from the exact-syllabus question bank.");
+                return {
+                    questions: acceptedQuestions,
+                    generationRun: {
+                        status: "completed",
+                        provider: "question-bank-fallback",
+                        model: "persisted-syllabus-questions",
+                        promptVersion: prompt_template_1.PROMPT_VERSION,
+                        requestPayload: {
+                            ...request,
+                            targetDifficultyCounts,
+                            previousQuestions: buildPreviousQuestions(),
+                        },
+                        responsePayload: {
+                            attempts: attemptSummaries,
+                            fallback: {
+                                reusedQuestionCount: selectedReusable.length,
+                                reason: lastError instanceof Error
+                                    ? lastError.message
+                                    : "Generation attempts did not fill every paper slot.",
+                            },
+                        },
+                        validationReport: {
+                            attempt: env_1.env.QUESTION_GENERATION_MAX_ATTEMPTS,
+                            validatedQuestionCount: acceptedQuestions.length,
+                            attemptSummaries,
+                            fallbackUsed: true,
+                            metrics: {
+                                ...aggregateMetrics,
+                                durationMs: Date.now() - startedAt,
+                            },
+                        },
+                        failureReason: null,
+                    },
+                    historicalAnalysisSummary,
+                };
             }
         }
         if (lastError instanceof app_error_1.AppError) {

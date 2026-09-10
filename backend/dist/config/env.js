@@ -79,13 +79,19 @@ const envSchema = zod_1.z.object({
     OPENAI_BASE_URL: zod_1.z.string().default("https://api.openai.com/v1"),
     OPENAI_MODEL: zod_1.z.string().default("gpt-5.2"),
     OPENAI_REVIEW_MODEL: zod_1.z.string().default("gpt-5.2"),
+    OPENAI_REQUEST_TIMEOUT_MS: zod_1.z.coerce
+        .number()
+        .int()
+        .min(5000)
+        .max(180000)
+        .default(60000),
     OPENAI_GENERATION_REASONING_EFFORT: reasoningEffort.default("low"),
     OPENAI_GENERATION_BATCH_SIZE: zod_1.z.coerce
         .number()
         .int()
         .min(1)
-        .max(10)
-        .default(3),
+        .max(25)
+        .default(20),
     OPENAI_GENERATION_CONCURRENCY: zod_1.z.coerce
         .number()
         .int()
@@ -97,12 +103,14 @@ const envSchema = zod_1.z.object({
     OPENAI_REVIEW_CONCURRENCY: zod_1.z.coerce.number().int().min(1).max(4).default(3),
     OPENAI_EMBEDDING_MODEL: zod_1.z.string().default("text-embedding-3-small"),
     QUESTION_PROVIDER: zod_1.z.enum(["openai", "mock"]).default("openai"),
+    DEMO_FAST_GENERATION: booleanish,
     QUESTION_GENERATION_MAX_ATTEMPTS: zod_1.z.coerce
         .number()
         .int()
         .positive()
-        .default(4),
+        .default(2),
     QUESTION_GENERATION_TEMPERATURE: zod_1.z.coerce.number().min(0).max(2).default(0.4),
+    ACADEMIC_REVIEW_ENABLED: booleanish,
     SEMANTIC_DEDUP_ENABLED: booleanish,
     SEMANTIC_SIMILARITY_THRESHOLD: zod_1.z.coerce.number().min(0).max(1).default(0.92),
     DEFAULT_ADMIN_EMAIL: zod_1.z.string().optional(),
@@ -112,6 +120,7 @@ if (!parsed.success) {
     const issues = parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`);
     throw new Error(`Invalid environment configuration:\n${issues.join("\n")}`);
 }
+const demoFastGeneration = parsed.data.DEMO_FAST_GENERATION ?? true;
 exports.env = {
     ...parsed.data,
     AUTH_COOKIE_SECURE: parsed.data.AUTH_COOKIE_SECURE,
@@ -120,6 +129,18 @@ exports.env = {
     DATABASE_SYNCHRONIZE: parsed.data.DATABASE_SYNCHRONIZE ?? false,
     DATABASE_RUN_MIGRATIONS_ON_START: parsed.data.DATABASE_RUN_MIGRATIONS_ON_START ?? true,
     DATABASE_SSL: parsed.data.DATABASE_SSL ?? false,
-    SEMANTIC_DEDUP_ENABLED: parsed.data.SEMANTIC_DEDUP_ENABLED ?? true,
+    DEMO_FAST_GENERATION: demoFastGeneration,
+    OPENAI_GENERATION_BATCH_SIZE: demoFastGeneration
+        ? Math.max(parsed.data.OPENAI_GENERATION_BATCH_SIZE, 20)
+        : parsed.data.OPENAI_GENERATION_BATCH_SIZE,
+    QUESTION_GENERATION_MAX_ATTEMPTS: demoFastGeneration
+        ? Math.min(parsed.data.QUESTION_GENERATION_MAX_ATTEMPTS, 2)
+        : parsed.data.QUESTION_GENERATION_MAX_ATTEMPTS,
+    ACADEMIC_REVIEW_ENABLED: demoFastGeneration
+        ? false
+        : (parsed.data.ACADEMIC_REVIEW_ENABLED ?? true),
+    SEMANTIC_DEDUP_ENABLED: demoFastGeneration
+        ? false
+        : (parsed.data.SEMANTIC_DEDUP_ENABLED ?? true),
 };
 //# sourceMappingURL=env.js.map

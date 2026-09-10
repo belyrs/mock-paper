@@ -1,6 +1,14 @@
 import type { Paper } from "../entities/paper.entity";
 import type { Question } from "../entities/question.entity";
 import type { User } from "../entities/user.entity";
+import {
+  containsInternalTechnologyReference,
+  redactInternalTechnologyReferences,
+} from "./public-content";
+
+function publicText(value: string) {
+  return redactInternalTechnologyReferences(value);
+}
 
 export function serializeUser(user: User) {
   return {
@@ -25,20 +33,21 @@ export function serializeQuestion(question: Question) {
     targetExams: question.targetExams,
     difficulty: question.difficulty,
     questionType: question.questionType,
-    text: question.text,
-    options: question.options,
+    text: publicText(question.text),
+    options: question.options.map(publicText),
     correctOption: question.correctOption,
     correctIndex: question.correctIndex,
-    conceptTested: question.conceptTested,
-    commonMistake: question.commonMistake,
-    recommendedRemedialAction: question.recommendedRemedialAction,
-    learningOutcome: question.learningOutcome,
-    bloomsTaxonomyLevel: question.bloomsTaxonomyLevel,
+    conceptTested: publicText(question.conceptTested),
+    commonMistake: publicText(question.commonMistake),
+    recommendedRemedialAction: publicText(question.recommendedRemedialAction),
+    learningOutcome: publicText(question.learningOutcome),
+    bloomsTaxonomyLevel: publicText(question.bloomsTaxonomyLevel),
     examRelevance: question.examRelevance,
-    sourceReference: question.sourceReference,
-    generationProvider: question.generationProvider,
-    generationModel: question.generationModel,
-    promptVersion: question.promptVersion,
+    sourceReference:
+      question.sourceReference &&
+      !containsInternalTechnologyReference(question.sourceReference)
+        ? question.sourceReference
+        : null,
     createdAt: question.createdAt,
     updatedAt: question.updatedAt,
   };
@@ -56,15 +65,10 @@ export function serializePaper(paper: Paper) {
     subjectConfigurations: paper.subjectConfigurations,
     questionCount: paper.questionCount,
     status: paper.status,
-    generationProvider: paper.generationProvider,
-    generationModel: paper.generationModel,
-    promptVersion: paper.promptVersion,
-    historicalAnalysisMode: paper.historicalAnalysisMode,
-    historicalAnalysisSummary: paper.historicalAnalysisSummary,
-    validationSummary: paper.validationSummary,
-    notes: paper.notes,
     createdAt: paper.createdAt,
     updatedAt: paper.updatedAt,
-    questions: (paper.questions ?? []).map(serializeQuestion).sort((left, right) => left.position - right.position),
+    questions: (paper.questions ?? [])
+      .map(serializeQuestion)
+      .sort((left, right) => left.position - right.position),
   };
 }

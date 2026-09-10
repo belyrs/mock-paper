@@ -66,7 +66,7 @@ function PaperPage() {
       <GenerationProgressCard
         title="Preparing your paper..."
         description="Your generated paper is being fetched and rendered for review."
-        detail="We already have the generation response. The app is loading the saved paper, answer key, and question metadata into the review screen."
+        detail="The paper is ready. Loading the saved questions, answer key, and review details."
         seedKey={`load:${currentPaperId}`}
       />
     );
@@ -176,14 +176,6 @@ function PaperPage() {
               <span className="bg-gold-gradient inline-block size-2 rounded-full" />{" "}
               Answer Key
             </h2>
-            <div className="mt-4 rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm">
-              <p className="font-semibold">
-                Historical Analysis Mode: {currentPaper.historicalAnalysisMode}
-              </p>
-              <p className="mt-1 text-muted-foreground">
-                {currentPaper.historicalAnalysisSummary.trendSummary}
-              </p>
-            </div>
             <ol className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {questions.map((q, i) => (
                 <li

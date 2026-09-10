@@ -48,21 +48,17 @@ class HistoricalRepository {
     }
     findRelevantQuestions(payload) {
         return this.questionRepository.find({
-            where: [
-                {
-                    subject: payload.subject,
-                    chapterNormalized: payload.chapterNormalized,
-                },
-                {
-                    subject: payload.subject,
-                    subTopicNormalized: payload.subTopicNormalized,
-                },
-            ],
+            where: {
+                subject: payload.subject,
+                chapterNormalized: payload.chapterNormalized,
+                subTopicNormalized: payload.subTopicNormalized,
+            },
             relations: { paper: true },
             order: {
                 paper: { year: "DESC" },
                 questionNumber: "ASC",
             },
+            take: 40,
         });
     }
 }

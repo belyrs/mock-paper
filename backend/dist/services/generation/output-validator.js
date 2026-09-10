@@ -1,11 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateProviderOutput = validateProviderOutput;
+exports.validateProviderCandidates = validateProviderCandidates;
 const zod_1 = require("zod");
 const app_error_1 = require("../../errors/app-error");
 const domain_1 = require("../../constants/domain");
 const difficulty_1 = require("../../utils/difficulty");
 const normalization_1 = require("../../utils/normalization");
+const public_content_1 = require("../../utils/public-content");
 const bannedPlaceholderPatterns = [
     /\bscenario tagged\b/i,
     /\breference values?\b/i,
@@ -193,12 +195,11 @@ function countInlineChoiceMarkers(text) {
     return (text.match(/(?:^|\s)(?:[A-D][\).:]|\([A-D]\))\s+/gi) ?? []).length;
 }
 function hasEnoughTopicGrounding(question, request) {
-    if (!request.syllabusContext.canonicalMatch) {
-        return true;
-    }
     const keywordPool = request.syllabusContext.validationKeywords
         .map((keyword) => (0, normalization_1.normalizeText)(keyword))
         .filter((keyword) => keyword.length >= 4);
+    if (keywordPool.length === 0)
+        return true;
     const combined = (0, normalization_1.normalizeText)([
         question.questionText,
         question.options.join(" "),
@@ -209,9 +210,6 @@ function hasEnoughTopicGrounding(question, request) {
     return new Set(keywordHits).size >= 1;
 }
 function conceptAlignsWithGrounding(question, request) {
-    if (!request.syllabusContext.canonicalMatch) {
-        return true;
-    }
     const concept = (0, normalization_1.normalizeText)(question.conceptTested);
     const matchesGroundedConcept = request.syllabusContext.coreConcepts.some((allowedConcept) => {
         const normalizedAllowedConcept = (0, normalization_1.normalizeText)(allowedConcept);
@@ -222,7 +220,13 @@ function conceptAlignsWithGrounding(question, request) {
     if (matchesGroundedConcept) {
         return true;
     }
-    return request.syllabusContext.validationKeywords.some((keyword) => concept.includes((0, normalization_1.normalizeText)(keyword)));
+    const questionContext = (0, normalization_1.normalizeText)(`${question.questionText} ${question.options.join(" ")} ${concept}`);
+    return request.syllabusContext.validationKeywords.some((keyword) => {
+        const normalizedKeyword = (0, normalization_1.normalizeText)(keyword);
+        return (normalizedKeyword.length >= 4 &&
+            (concept.includes(normalizedKeyword) ||
+                questionContext.includes(normalizedKeyword)));
+    });
 }
 function keywordOverlap(left, right) {
     const leftTokens = new Set(left.split(" ").filter((token) => token.length >= 4));
@@ -276,9 +280,21 @@ function validateProviderOutput(request, result) {
             sanitizedQuestion.commonMistake,
             sanitizedQuestion.recommendedRemedialAction,
             sanitizedQuestion.learningOutcome,
+            sanitizedQuestion.bloomsTaxonomyLevel,
+            sanitizedQuestion.sourceReference ?? "",
+            sanitizedQuestion.solutionOutline ?? "",
+            sanitizedQuestion.difficultyRationale ?? "",
         ];
         if (hasPlaceholderLeakage(userFacingTexts)) {
             throw new app_error_1.AppError(502, "ACADEMIC_VALIDATION_FAILED", "The generated output leaked placeholder or synthetic internal metadata into user-facing question content.", {
+                questionNumber: question.questionNumber,
+                subject: request.subject,
+                chapter: request.chapter,
+                subTopic: request.subTopic,
+            });
+        }
+        if (userFacingTexts.some(public_content_1.containsInternalTechnologyReference)) {
+            throw new app_error_1.AppError(502, "ACADEMIC_VALIDATION_FAILED", "The generated output contains internal preparation terminology.", {
                 questionNumber: question.questionNumber,
                 subject: request.subject,
                 chapter: request.chapter,
@@ -352,5 +368,60 @@ function validateProviderOutput(request, result) {
             },
         };
     });
+}
+function candidateText(value) {
+    if (!value || typeof value !== "object")
+        return null;
+    const record = value;
+    const text = record.questionText ?? record.text ?? record.stem ?? record.question;
+    return typeof text === "string" ? sanitizeText(text).slice(0, 500) : null;
+}
+function validateProviderCandidates(request, result) {
+    const acceptedQuestions = [];
+    const rejectedQuestions = [];
+    result.questions.forEach((question, index) => {
+        const planSlot = request.generationPlan[index];
+        const expectedDifficulty = planSlot?.difficulty ?? "Medium";
+        const difficultyCounts = {
+            Easy: expectedDifficulty === "Easy" ? 1 : 0,
+            Medium: expectedDifficulty === "Medium" ? 1 : 0,
+            Hard: expectedDifficulty === "Hard" ? 1 : 0,
+        };
+        try {
+            const [validated] = validateProviderOutput({
+                ...request,
+                questionCount: 1,
+                difficultyCounts,
+                selectionDifficultyCounts: undefined,
+                generationPlan: planSlot ? [{ ...planSlot, slotNumber: 1 }] : [],
+            }, {
+                ...result,
+                questions: [question],
+            });
+            if (validated)
+                acceptedQuestions.push(validated);
+        }
+        catch (error) {
+            rejectedQuestions.push({
+                candidateIndex: index + 1,
+                questionText: candidateText(question),
+                code: error instanceof app_error_1.AppError ? error.code : "INVALID_GENERATION_OUTPUT",
+                message: error instanceof Error
+                    ? error.message
+                    : "The generated candidate could not be validated.",
+            });
+        }
+    });
+    if (result.questions.length < request.questionCount) {
+        for (let index = result.questions.length; index < request.questionCount; index += 1) {
+            rejectedQuestions.push({
+                candidateIndex: index + 1,
+                questionText: null,
+                code: "MISSING_GENERATED_QUESTION",
+                message: "The generation provider omitted this requested question slot.",
+            });
+        }
+    }
+    return { acceptedQuestions, rejectedQuestions };
 }
 //# sourceMappingURL=output-validator.js.map

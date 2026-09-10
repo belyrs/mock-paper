@@ -1,7 +1,7 @@
 import { AppError } from "../errors/app-error";
 import { logger } from "../config/logger";
 import { HistoricalAnalysisService } from "./historical-analysis.service";
-import { validateProviderOutput } from "./generation/output-validator";
+import { validateProviderCandidates } from "./generation/output-validator";
 import { PROMPT_VERSION } from "./generation/prompt-template";
 import type {
   GenerationProviderRequest,
@@ -27,29 +27,9 @@ import {
 } from "../utils/difficulty";
 import { normalizeText } from "../utils/normalization";
 import { buildGenerationPlan } from "./generation/plan-builder";
+import type { Question } from "../entities/question.entity";
 
-const MAX_PROMPT_QUESTION_CONTEXT = 36;
-
-export function addRetryCandidateReserve(
-  remainingCounts: DifficultyMix,
-  attempt: number,
-): DifficultyMix {
-  if (attempt === 1) {
-    return { ...remainingCounts };
-  }
-
-  return Object.fromEntries(
-    (["Easy", "Medium", "Hard"] as Difficulty[]).map((difficulty) => {
-      const remaining = remainingCounts[difficulty];
-      if (remaining === 0) {
-        return [difficulty, 0];
-      }
-
-      const reserve = Math.min(3, Math.max(1, Math.ceil(remaining * 0.4)));
-      return [difficulty, remaining + reserve];
-    }),
-  ) as unknown as DifficultyMix;
-}
+const MAX_PROMPT_QUESTION_CONTEXT = 10;
 
 function selectRequiredDifficultyMix(
   candidates: ValidatedQuestionPayload[],
@@ -65,6 +45,40 @@ function selectRequiredDifficultyMix(
     availableSlots[question.difficulty] -= 1;
     return true;
   });
+}
+
+function toReusableQuestionPayload(
+  question: Question,
+): ValidatedQuestionPayload {
+  return {
+    subject: question.subject,
+    classLevel: question.classLevel,
+    chapter: question.chapter,
+    subTopic: question.subTopic,
+    targetExams: question.targetExams,
+    difficulty: question.difficulty,
+    text: question.text,
+    options: question.options,
+    correctOption:
+      question.correctOption as ValidatedQuestionPayload["correctOption"],
+    correctIndex: question.correctIndex,
+    conceptTested: question.conceptTested,
+    commonMistake: question.commonMistake,
+    recommendedRemedialAction: question.recommendedRemedialAction,
+    learningOutcome: question.learningOutcome,
+    bloomsTaxonomyLevel: question.bloomsTaxonomyLevel,
+    examRelevance: question.examRelevance,
+    sourceReference: question.sourceReference,
+    normalizedText: question.normalizedText,
+    normalizedHash: question.normalizedHash,
+    structuralFingerprint: question.structuralFingerprint,
+    semanticEmbedding: null,
+    metadata: {
+      ...(question.metadata ?? {}),
+      reusedFromQuestionId: question.id,
+      fallbackReason: "generation_or_repair_exhausted",
+    },
+  };
 }
 
 export function shouldAcceptAcademicReview(
@@ -251,7 +265,7 @@ export class QuestionGenerationService {
 
     const buildPreviousQuestions = (attempt = 1) => {
       const compact = (text: string) =>
-        text.replace(/\s+/g, " ").trim().slice(0, 220);
+        text.replace(/\s+/g, " ").trim().slice(0, 160);
       const bankReferences = [
         ...duplicateContext.existingQuestions,
         ...duplicateContext.historicalQuestions,
@@ -332,19 +346,8 @@ export class QuestionGenerationService {
           break;
         }
 
-        const isRepairAttempt = rejectedQuestionTexts.length > 0;
-        const shouldUseInitialCandidatePool =
-          attempt === 1 &&
-          Boolean(this.provider.reviewQuestions) &&
-          duplicateContext.existingQuestions.length +
-            duplicateContext.historicalQuestions.length >=
-            input.subjectConfiguration.numberOfQuestions * 2;
-        const candidateDifficultyCounts = addRetryCandidateReserve(
-          remainingDifficultyCounts,
-          isRepairAttempt || shouldUseInitialCandidatePool
-            ? Math.max(2, attempt)
-            : 1,
-        );
+        const isRepairAttempt = attempt > 1;
+        const candidateDifficultyCounts = { ...remainingDifficultyCounts };
         const candidateQuestionCount = totalDifficultyCount(
           candidateDifficultyCounts,
         );
@@ -393,7 +396,6 @@ export class QuestionGenerationService {
             remainingDifficultyCounts,
             candidateDifficultyCounts,
             isRepairAttempt,
-            shouldUseInitialCandidatePool,
             promptExclusionCount: attemptRequest.previousQuestions.length,
             generationPlanSlots: attemptRequest.generationPlan.length,
           },
@@ -431,17 +433,31 @@ export class QuestionGenerationService {
           providerResult.metrics?.promptCharacters ?? 0;
         aggregateMetrics.responseCharacters +=
           providerResult.metrics?.responseCharacters ?? 0;
-        const validatedQuestions = validateProviderOutput(
+        const candidateValidation = validateProviderCandidates(
           attemptRequest,
           providerResult,
         );
+        const validatedQuestions = candidateValidation.acceptedQuestions;
+        if (candidateValidation.rejectedQuestions.length > 0) {
+          rejectedQuestionTexts.push(
+            ...candidateValidation.rejectedQuestions.flatMap((rejection) =>
+              rejection.questionText ? [rejection.questionText] : [],
+            ),
+          );
+          rejectionReasons.push(
+            ...candidateValidation.rejectedQuestions.map(
+              (rejection) => `${rejection.code}: ${rejection.message}`,
+            ),
+          );
+        }
         logger.info(
           {
             subject: request.subject,
             attempt,
             validatedQuestionCount: validatedQuestions.length,
+            rejectedQuestionCount: candidateValidation.rejectedQuestions.length,
           },
-          "Generated questions passed schema validation.",
+          "Generated candidates were validated independently.",
         );
 
         const duplicateAssessment =
@@ -484,6 +500,7 @@ export class QuestionGenerationService {
         > | null = null;
 
         if (
+          env.ACADEMIC_REVIEW_ENABLED &&
           this.provider.reviewQuestions &&
           duplicateAssessment.acceptedQuestions.length > 0
         ) {
@@ -729,6 +746,115 @@ export class QuestionGenerationService {
           },
           "Question generation attempt failed.",
         );
+      }
+    }
+
+    const remainingBeforeFallback =
+      input.subjectConfiguration.numberOfQuestions - acceptedQuestions.length;
+
+    if (remainingBeforeFallback > 0) {
+      const reusableQuestions =
+        await this.duplicateDetectionService.findReusableQuestions({
+          subject: input.subjectConfiguration.subject,
+          classLevel: input.classLevel,
+          chapter: input.subjectConfiguration.chapter,
+          subTopic: input.subjectConfiguration.subTopic,
+          excludePaperId: input.excludePaperId,
+          limit: 60,
+        });
+      const seenHashes = new Set(
+        acceptedQuestions.map((question) => question.normalizedHash),
+      );
+      const remainingCounts = subtractDifficultyCounts(
+        targetDifficultyCounts,
+        countByDifficulty(acceptedQuestions),
+      );
+      const unused = reusableQuestions.filter(
+        (question) => !seenHashes.has(question.normalizedHash),
+      );
+      const selectedReusable: ValidatedQuestionPayload[] = [];
+
+      for (const difficulty of ["Easy", "Medium", "Hard"] as Difficulty[]) {
+        for (const question of unused) {
+          if (remainingCounts[difficulty] <= 0) break;
+          if (
+            question.difficulty !== difficulty ||
+            seenHashes.has(question.normalizedHash)
+          ) {
+            continue;
+          }
+
+          selectedReusable.push(toReusableQuestionPayload(question));
+          seenHashes.add(question.normalizedHash);
+          remainingCounts[difficulty] -= 1;
+        }
+      }
+
+      for (const question of unused) {
+        if (
+          acceptedQuestions.length + selectedReusable.length >=
+          input.subjectConfiguration.numberOfQuestions
+        ) {
+          break;
+        }
+        if (seenHashes.has(question.normalizedHash)) continue;
+
+        selectedReusable.push(toReusableQuestionPayload(question));
+        seenHashes.add(question.normalizedHash);
+      }
+
+      acceptedQuestions.push(...selectedReusable);
+
+      if (
+        acceptedQuestions.length ===
+        input.subjectConfiguration.numberOfQuestions
+      ) {
+        logger.warn(
+          {
+            subject: request.subject,
+            reusedQuestionCount: selectedReusable.length,
+            generatedQuestionCount:
+              acceptedQuestions.length - selectedReusable.length,
+          },
+          "Generation attempts were incomplete; filled the remaining paper slots from the exact-syllabus question bank.",
+        );
+
+        return {
+          questions: acceptedQuestions,
+          generationRun: {
+            status: "completed",
+            provider: "question-bank-fallback",
+            model: "persisted-syllabus-questions",
+            promptVersion: PROMPT_VERSION,
+            requestPayload: {
+              ...request,
+              targetDifficultyCounts,
+              previousQuestions: buildPreviousQuestions(),
+            } as unknown as Record<string, unknown>,
+            responsePayload: {
+              attempts: attemptSummaries,
+              fallback: {
+                reusedQuestionCount: selectedReusable.length,
+                reason:
+                  lastError instanceof Error
+                    ? lastError.message
+                    : "Generation attempts did not fill every paper slot.",
+              },
+            },
+            validationReport: {
+              attempt: env.QUESTION_GENERATION_MAX_ATTEMPTS,
+              validatedQuestionCount: acceptedQuestions.length,
+              attemptSummaries,
+              fallbackUsed: true,
+              metrics: {
+                ...aggregateMetrics,
+                durationMs: Date.now() - startedAt,
+              },
+            },
+            failureReason: null,
+          },
+          historicalAnalysisSummary,
+        };
       }
     }
 

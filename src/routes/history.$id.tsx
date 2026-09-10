@@ -128,14 +128,6 @@ function HistoryDetail() {
                 <span className="bg-gold-gradient inline-block size-2 rounded-full" />{" "}
                 Answer Key
               </h2>
-              <div className="mt-4 rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm">
-                <p className="font-semibold">
-                  Historical Analysis Mode: {paper.historicalAnalysisMode}
-                </p>
-                <p className="mt-1 text-muted-foreground">
-                  {paper.historicalAnalysisSummary.trendSummary}
-                </p>
-              </div>
               <ol className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {paper.questions.map((q, i) => (
                   <li

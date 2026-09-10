@@ -49,9 +49,6 @@ export interface Question {
   bloomsTaxonomyLevel: string;
   examRelevance: Partial<Record<TargetExam, string>>;
   sourceReference: string | null;
-  generationProvider: string;
-  generationModel: string;
-  promptVersion: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -67,21 +64,6 @@ export interface Paper {
   subjectConfigurations: Array<SubjectConfig & { subject: string }>;
   questionCount: number;
   status: "active" | "deleted";
-  generationProvider: string;
-  generationModel: string;
-  promptVersion: string;
-  historicalAnalysisMode: "imported_dataset" | "model_knowledge_fallback" | "mixed";
-  historicalAnalysisSummary: {
-    mode: "imported_dataset" | "model_knowledge_fallback" | "mixed";
-    totalRelevantQuestions: number;
-    yearsCovered: number[];
-    trendSummary: string;
-    recurringConcepts: string[];
-    difficultyNotes: string[];
-    sourceDetails: string[];
-  };
-  validationSummary: Record<string, unknown>;
-  notes: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
   questions: Question[];

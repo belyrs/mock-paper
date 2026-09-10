@@ -1,1 +1,1 @@
-{"version":3,"file":"prompt-template.js","sourceRoot":"","sources":["../../../src/services/generation/prompt-template.ts"],"names":[],"mappings":";;;AAAa,QAAA,cAAc,GAAG,eAAe,CAAC;AAEjC,QAAA,WAAW,GAAG;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;gHAoFqF,CAAC"}
+{"version":3,"file":"prompt-template.js","sourceRoot":"","sources":["../../../src/services/generation/prompt-template.ts"],"names":[],"mappings":";;;AAAa,QAAA,cAAc,GAAG,oBAAoB,CAAC;AAEtC,QAAA,WAAW,GAAG;;;;;;;;;;;;;;;;;;;;;gFAqBqD,CAAC"}

@@ -98,6 +98,7 @@ export function createApp(dataSource: DataSource) {
     userRepository,
     questionGenerationService,
     generationRunRepository,
+    dataSource,
   );
 
   const authController = new AuthController(authService, passwordResetService);

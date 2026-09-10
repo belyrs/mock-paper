@@ -10,6 +10,19 @@ function publicText(value: string) {
   return redactInternalTechnologyReferences(value);
 }
 
+function compatibilityCurriculumSummary() {
+  return {
+    mode: "Curriculum aligned",
+    totalRelevantQuestions: 0,
+    yearsCovered: [] as number[],
+    trendSummary:
+      "Questions are aligned with the selected subject, chapter, subtopic, and examination pattern.",
+    recurringConcepts: [] as string[],
+    difficultyNotes: [] as string[],
+    sourceDetails: [] as string[],
+  };
+}
+
 export function serializeUser(user: User) {
   return {
     id: user.id,
@@ -65,6 +78,10 @@ export function serializePaper(paper: Paper) {
     subjectConfigurations: paper.subjectConfigurations,
     questionCount: paper.questionCount,
     status: paper.status,
+    // Keep independently deployed older frontends renderable without exposing
+    // provider, model, prompt, or internal validation information.
+    historicalAnalysisMode: "Curriculum aligned",
+    historicalAnalysisSummary: compatibilityCurriculumSummary(),
     createdAt: paper.createdAt,
     updatedAt: paper.updatedAt,
     questions: (paper.questions ?? [])

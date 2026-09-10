@@ -318,6 +318,13 @@ function conceptAlignsWithGrounding(
   });
 }
 
+function hasCuratedSyllabusGrounding(request: GenerationProviderRequest) {
+  return (
+    request.syllabusContext.canonicalMatch &&
+    request.syllabusContext.entryKey !== null
+  );
+}
+
 function keywordOverlap(left: string, right: string) {
   const leftTokens = new Set(
     left.split(" ").filter((token) => token.length >= 4),
@@ -455,7 +462,10 @@ export function validateProviderOutput(
       );
     }
 
-    if (!hasEnoughTopicGrounding(sanitizedQuestion, request)) {
+    if (
+      hasCuratedSyllabusGrounding(request) &&
+      !hasEnoughTopicGrounding(sanitizedQuestion, request)
+    ) {
       throw new AppError(
         502,
         "ACADEMIC_VALIDATION_FAILED",
@@ -470,7 +480,10 @@ export function validateProviderOutput(
       );
     }
 
-    if (!conceptAlignsWithGrounding(sanitizedQuestion, request)) {
+    if (
+      hasCuratedSyllabusGrounding(request) &&
+      !conceptAlignsWithGrounding(sanitizedQuestion, request)
+    ) {
       throw new AppError(
         502,
         "ACADEMIC_VALIDATION_FAILED",
@@ -533,6 +546,9 @@ export function validateProviderOutput(
         generationPlanSlot: request.generationPlan[index] ?? null,
         historicalAnalysisMode: result.historicalAnalysisMode,
         historicalAnalysisSummary: result.historicalAnalysisSummary,
+        syllabusGroundingValidation: hasCuratedSyllabusGrounding(request)
+          ? "curated"
+          : "provider-grounded",
         solutionOutline: sanitizedQuestion.solutionOutline ?? null,
         difficultyRationale: sanitizedQuestion.difficultyRationale ?? null,
       },

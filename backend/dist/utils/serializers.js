@@ -7,6 +7,17 @@ const public_content_1 = require("./public-content");
 function publicText(value) {
     return (0, public_content_1.redactInternalTechnologyReferences)(value);
 }
+function compatibilityCurriculumSummary() {
+    return {
+        mode: "Curriculum aligned",
+        totalRelevantQuestions: 0,
+        yearsCovered: [],
+        trendSummary: "Questions are aligned with the selected subject, chapter, subtopic, and examination pattern.",
+        recurringConcepts: [],
+        difficultyNotes: [],
+        sourceDetails: [],
+    };
+}
 function serializeUser(user) {
     return {
         id: user.id,
@@ -59,6 +70,10 @@ function serializePaper(paper) {
         subjectConfigurations: paper.subjectConfigurations,
         questionCount: paper.questionCount,
         status: paper.status,
+        // Keep independently deployed older frontends renderable without exposing
+        // provider, model, prompt, or internal validation information.
+        historicalAnalysisMode: "Curriculum aligned",
+        historicalAnalysisSummary: compatibilityCurriculumSummary(),
         createdAt: paper.createdAt,
         updatedAt: paper.updatedAt,
         questions: (paper.questions ?? [])
